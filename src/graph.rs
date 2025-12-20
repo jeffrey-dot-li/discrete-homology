@@ -1,4 +1,3 @@
-use core::panic;
 use std::{convert::TryFrom, usize};
 pub type AdjMatrix = Vec<Vec<bool>>;
 
@@ -100,7 +99,24 @@ impl TryFrom<AdjMatrix> for CSRGraph {
 }
 impl From<CSRGraph> for AdjMatrix {
     fn from(value: CSRGraph) -> Self {
-        panic!()
+        let n = value.offsets.len() - 1;
+        let mut mat = vec![vec![false; n]; n];
+
+        // Add self-loops (required but not explicitly stored in CSR)
+        for i in 0..n {
+            mat[i][i] = true;
+        }
+
+        // Add edges from neighbors
+        for i in 0..n {
+            let start = value.offsets[i] as usize;
+            let end = value.offsets[i + 1] as usize;
+            for &neighbor in &value.neighbors[start..end] {
+                mat[i][neighbor as usize] = true;
+            }
+        }
+
+        mat
     }
 }
 
