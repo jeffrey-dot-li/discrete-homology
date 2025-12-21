@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 pub type AdjMatrix = Vec<Vec<bool>>;
 
+// Simple Undirected Graph
 pub trait UGraph: TryFrom<AdjMatrix> + Into<AdjMatrix> {
     fn neighbors(&self, v: u32) -> &[u32];
     fn n(&self) -> u32;

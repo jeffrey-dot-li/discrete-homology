@@ -1,4 +1,4 @@
-pub mod graph;
+pub mod graphs;
 pub fn n_cube() {}
 
 fn main() {
