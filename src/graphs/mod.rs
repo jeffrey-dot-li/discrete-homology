@@ -1,3 +1,5 @@
+pub mod cube;
+
 use std::convert::TryFrom;
 pub type AdjMatrix = Vec<Vec<bool>>;
 
@@ -9,7 +11,7 @@ pub trait UGraph: TryFrom<AdjMatrix> + Into<AdjMatrix> {
 
 pub struct CSRGraph {
     offsets: Vec<u32>,
-    neighbors: Vec<u32>,
+    neighbor_list: Vec<u32>,
 }
 
 impl TryFrom<AdjMatrix> for CSRGraph {
@@ -19,7 +21,7 @@ impl TryFrom<AdjMatrix> for CSRGraph {
         if n == 0 {
             return Ok(Self {
                 offsets: vec![0],
-                neighbors: vec![],
+                neighbor_list: vec![],
             });
         }
         for (i, row) in mat.iter().enumerate() {
@@ -45,7 +47,8 @@ impl TryFrom<AdjMatrix> for CSRGraph {
                 }
             }
         }
-        let mut deg: Vec<u32> = vec![0; n];
+        // Start with 1 degree for self-loop
+        let mut deg: Vec<u32> = vec![1; n];
         for i in 0..n {
             for j in (i + 1)..n {
                 if mat[i][j] {
@@ -72,6 +75,10 @@ impl TryFrom<AdjMatrix> for CSRGraph {
         let mut cursor: Vec<u32> = offsets[..n].to_vec();
 
         for i in 0..n {
+            // Add self-loop
+            neighbors[cursor[i] as usize] = i as u32;
+            cursor[i] += 1;
+
             for j in (i + 1)..n {
                 if mat[i][j] {
                     let iu = i as u32;
@@ -95,7 +102,10 @@ impl TryFrom<AdjMatrix> for CSRGraph {
             let end = offsets[u + 1] as usize;
             neighbors[start..end].sort_unstable();
         }
-        Ok(Self { offsets, neighbors })
+        Ok(Self {
+            offsets,
+            neighbor_list: neighbors,
+        })
     }
 }
 impl From<CSRGraph> for AdjMatrix {
@@ -110,7 +120,7 @@ impl From<CSRGraph> for AdjMatrix {
 
             let start = value.offsets[i] as usize;
             let end = value.offsets[i + 1] as usize;
-            for &neighbor in &value.neighbors[start..end] {
+            for &neighbor in &value.neighbor_list[start..end] {
                 row[neighbor as usize] = true;
             }
         }
@@ -123,7 +133,7 @@ impl UGraph for CSRGraph {
     fn neighbors(&self, v: u32) -> &[u32] {
         let start = self.offsets[v as usize] as usize;
         let end = self.offsets[(v + 1) as usize] as usize;
-        &self.neighbors[start..end]
+        &self.neighbor_list[start..end]
     }
 
     fn n(&self) -> u32 {
@@ -133,6 +143,9 @@ impl UGraph for CSRGraph {
 
 impl CSRGraph {
     pub fn new(offsets: Vec<u32>, neighbors: Vec<u32>) -> Self {
-        Self { offsets, neighbors }
+        Self {
+            offsets,
+            neighbor_list: neighbors,
+        }
     }
 }
