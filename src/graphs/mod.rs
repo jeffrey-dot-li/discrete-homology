@@ -1,14 +1,28 @@
 pub mod cube;
+pub mod extras;
 
 use std::convert::TryFrom;
 pub type AdjMatrix = Vec<Vec<bool>>;
 
 // Simple Undirected Graph
 pub trait UGraph: TryFrom<AdjMatrix> + Into<AdjMatrix> {
-    fn neighbors(&self, v: u32) -> &[u32];
+    fn neighbors<V>(&self, v: V) -> &[u32]
+    where
+        V: Into<u32>;
     fn n(&self) -> u32;
-}
 
+    fn degree(&self, v: u32) -> u32 {
+        self.neighbors(v).len() as u32
+    }
+    fn is_neighbor<V>(&self, a: V, b: V) -> bool
+    where
+        V: Into<u32>,
+    {
+        // This is actually suboptimal because we know that neighbors is sorted
+        self.neighbors(a).contains(&b.into())
+    }
+}
+#[derive(Debug, Clone)]
 pub struct CSRGraph {
     offsets: Vec<u32>,
     neighbor_list: Vec<u32>,
@@ -130,7 +144,11 @@ impl From<CSRGraph> for AdjMatrix {
 }
 
 impl UGraph for CSRGraph {
-    fn neighbors(&self, v: u32) -> &[u32] {
+    fn neighbors<V>(&self, v: V) -> &[u32]
+    where
+        V: Into<u32>,
+    {
+        let v: u32 = v.into();
         let start = self.offsets[v as usize] as usize;
         let end = self.offsets[(v + 1) as usize] as usize;
         &self.neighbor_list[start..end]
