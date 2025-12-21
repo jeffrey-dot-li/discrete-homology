@@ -114,19 +114,17 @@ mod tests {
         let invalid_map = GraphMap::try_new(&cube, &cube, mapping.clone());
 
         match invalid_map {
-            Err(GraphMapError::BadEdge(v1, v2)) => {
-                println!("✓ Got expected BadEdge({v1}, {v2})");
-                println!("  Domain edge: ({v1}, {v2})");
-                println!(
-                    "  Would map to: ({}, {}) in codomain",
-                    mapping[v1 as usize], mapping[v2 as usize]
-                );
+            Err(GraphMapError::BadEdge(_v1, _v2)) => {
+                // Expected error
             }
             Err(GraphMapError::InvalidMap(msg)) => {
                 panic!("Expected BadEdge, got InvalidMap: {msg}");
             }
             Ok(_) => {
-                panic!("Expected BadEdge error, but GraphMap was created successfully with mapping {mapping:?}");
+                panic!(
+                    "Expected BadEdge error, but GraphMap was created successfully.\n\
+                     Mapping: {mapping:?}"
+                );
             }
         }
     }
@@ -140,19 +138,23 @@ mod tests {
         let invalid_map = GraphMap::try_new(&cube, &cube, mapping.clone());
 
         match invalid_map {
-            Err(GraphMapError::InvalidMap(msg)) => {
-                println!("✓ Got expected InvalidMap: {msg}");
-                println!(
-                    "  Mapping length: {}, Domain vertices: {}",
+            Err(GraphMapError::InvalidMap(_msg)) => {
+                // Expected error
+            }
+            Err(GraphMapError::BadEdge(v1, v2)) => {
+                panic!(
+                    "Expected InvalidMap (wrong length), got BadEdge({v1}, {v2}).\n\
+                     Mapping length: {}, Domain vertices: {}",
                     mapping.len(),
                     cube.n()
                 );
             }
-            Err(GraphMapError::BadEdge(v1, v2)) => {
-                panic!("Expected InvalidMap (wrong length), got BadEdge({v1}, {v2})");
-            }
             Ok(_) => {
-                panic!("Expected InvalidMap error, but GraphMap was created successfully with mapping {mapping:?}");
+                panic!(
+                    "Expected InvalidMap error, but GraphMap was created successfully.\n\
+                     Mapping: {mapping:?}, Domain vertices: {}",
+                    cube.n()
+                );
             }
         }
     }
@@ -168,20 +170,22 @@ mod tests {
         let invalid_map = GraphMap::try_new(&cube2, &cube3, mapping.clone());
 
         match invalid_map {
-            Err(GraphMapError::InvalidMap(msg)) => {
-                println!("✓ Got expected InvalidMap: {msg}");
-                println!("  Mapping: {mapping:?}");
-                println!(
-                    "  Codomain has {} vertices (0-{})",
-                    cube3.n(),
+            Err(GraphMapError::InvalidMap(_msg)) => {
+                // Expected error
+            }
+            Err(GraphMapError::BadEdge(v1, v2)) => {
+                panic!(
+                    "Expected InvalidMap (out of range), got BadEdge({v1}, {v2}).\n\
+                     Mapping: {mapping:?}, Codomain vertices: 0-{}",
                     cube3.n() - 1
                 );
             }
-            Err(GraphMapError::BadEdge(v1, v2)) => {
-                panic!("Expected InvalidMap (out of range), got BadEdge({v1}, {v2})");
-            }
             Ok(_) => {
-                panic!("Expected InvalidMap error, but GraphMap was created successfully with mapping {mapping:?}");
+                panic!(
+                    "Expected InvalidMap error, but GraphMap was created successfully.\n\
+                     Mapping: {mapping:?}, Codomain vertices: 0-{}",
+                    cube3.n() - 1
+                );
             }
         }
     }

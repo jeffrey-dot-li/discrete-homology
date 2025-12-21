@@ -164,3 +164,154 @@ impl CSRGraph {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tryfrom_non_square_matrix() {
+        // Create a non-square matrix (3 rows but row 1 has only 2 columns)
+        let mat: AdjMatrix = vec![
+            vec![true, false, true],
+            vec![false, true], // Wrong length!
+            vec![true, false, true],
+        ];
+
+        let result = CSRGraph::try_from(mat.clone());
+
+        match result {
+            Err(err) => {
+                assert!(
+                    err.contains("square"),
+                    "Error should mention 'square', got: {err}"
+                );
+            }
+            Ok(_) => {
+                panic!(
+                    "Expected error for non-square matrix, but CSRGraph was created successfully.\n\
+                     Matrix dimensions: {} rows\n\
+                     Row 0 length: {}\n\
+                     Row 1 length: {} (should be {})",
+                    mat.len(),
+                    mat[0].len(),
+                    mat[1].len(),
+                    mat.len()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_tryfrom_missing_self_loop() {
+        // Create a matrix missing a self-loop at position [1][1]
+        let mat: AdjMatrix = vec![
+            vec![true, false, false],
+            vec![false, false, false], // Missing self-loop at [1][1]!
+            vec![false, false, true],
+        ];
+
+        let result = CSRGraph::try_from(mat.clone());
+
+        match result {
+            Err(err) => {
+                assert!(
+                    err.contains("identity") || err.contains("mat[1][1]"),
+                    "Error should mention identity relation or mat[1][1], got: {err}"
+                );
+            }
+            Ok(_) => {
+                let diagonal_info: Vec<String> = mat
+                    .iter()
+                    .enumerate()
+                    .map(|(i, row)| format!("mat[{i}][{i}] = {}", row[i]))
+                    .collect();
+                panic!(
+                    "Expected error for missing self-loop, but CSRGraph was created successfully.\n\
+                     Diagonal values:\n  {}",
+                    diagonal_info.join("\n  ")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_tryfrom_non_symmetric_matrix() {
+        // Create a non-symmetric matrix where mat[0][1] != mat[1][0]
+        let mat: AdjMatrix = vec![
+            vec![true, true, false],  // mat[0][1] = true
+            vec![false, true, false], // mat[1][0] = false (asymmetric!)
+            vec![false, false, true],
+        ];
+
+        let result = CSRGraph::try_from(mat.clone());
+
+        match result {
+            Err(err) => {
+                assert!(
+                    err.contains("symmetric"),
+                    "Error should mention 'symmetric', got: {err}"
+                );
+            }
+            Ok(_) => {
+                panic!(
+                    "Expected error for non-symmetric matrix, but CSRGraph was created successfully.\n\
+                     Asymmetry at: mat[0][1] = {}, mat[1][0] = {}",
+                    mat[0][1], mat[1][0]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_tryfrom_valid_matrix() {
+        // Test that a valid matrix successfully converts
+        let mat: AdjMatrix = vec![
+            vec![true, true, false],
+            vec![true, true, true],
+            vec![false, true, true],
+        ];
+
+        let result = CSRGraph::try_from(mat.clone());
+
+        match result {
+            Ok(graph) => {
+                assert_eq!(graph.n(), 3, "Graph should have 3 vertices");
+
+                // Verify the graph structure matches the matrix
+                for i in 0..3u32 {
+                    let neighbors = graph.neighbors(i);
+
+                    for j in 0..3u32 {
+                        let should_be_neighbor = mat[i as usize][j as usize];
+                        let is_neighbor = neighbors.contains(&j);
+                        assert_eq!(
+                            is_neighbor, should_be_neighbor,
+                            "Vertex {i} neighbor {j}: expected {should_be_neighbor}, got {is_neighbor}. Neighbors: {neighbors:?}"
+                        );
+                    }
+                }
+            }
+            Err(err) => {
+                panic!("Expected successful conversion for valid matrix, got error: {err}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_tryfrom_empty_matrix() {
+        // Test edge case: empty matrix
+        let mat: AdjMatrix = vec![];
+
+        let result = CSRGraph::try_from(mat);
+
+        match result {
+            Ok(graph) => {
+                assert_eq!(graph.n(), 0, "Empty graph should have 0 vertices");
+            }
+            Err(err) => {
+                panic!("Expected successful conversion for empty matrix, got error: {err}");
+            }
+        }
+    }
+}
