@@ -4,3 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+
+
+[package.metadata.docs.rs]
+features = ["nightly"]
+
+
+[features]
+default = []
+nightly = []
+

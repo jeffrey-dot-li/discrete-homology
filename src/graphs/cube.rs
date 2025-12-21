@@ -1,5 +1,8 @@
 use crate::graphs::{AdjMatrix, CSRGraph, UGraph};
 
+pub struct CubeGraph {
+    g: CSRGraph,
+}
 pub fn differ_by_one_bit(a: usize, b: usize) -> bool {
     let x: usize = a ^ b;
     x.is_power_of_two()
@@ -89,6 +92,9 @@ mod tests {
         let adj2: AdjMatrix = csr.into();
 
         // Check that both matrices are identical
-        assert_eq!(adj1, adj2, "Roundtrip conversion should preserve matrix structure");
+        assert_eq!(
+            adj1, adj2,
+            "Roundtrip conversion should preserve matrix structure"
+        );
     }
 }

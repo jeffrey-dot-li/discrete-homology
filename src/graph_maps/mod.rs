@@ -1,6 +1,18 @@
+pub mod cube_maps;
 use crate::graphs::UGraph;
+use std::fmt::Debug;
+
+pub trait GraphMap<'a, U, V>
+where
+    U: UGraph,
+    V: UGraph,
+{
+    fn domain(&self) -> &'a U;
+    fn codomain(&self) -> &'a V;
+    fn map(&self, u: u32) -> u32;
+}
 #[derive(Debug)]
-pub struct GraphMap<'a, U, V>
+pub struct VertGraphMap<'a, U, V>
 where
     U: UGraph,
     V: UGraph,
@@ -15,7 +27,7 @@ pub enum GraphMapError {
     InvalidMap(String),
 }
 
-impl<'a, U, V> GraphMap<'a, U, V>
+impl<'a, U, V> VertGraphMap<'a, U, V>
 where
     U: UGraph,
     V: UGraph,
@@ -67,6 +79,22 @@ where
     }
 }
 
+impl<'a, U, V> GraphMap<'a, U, V> for VertGraphMap<'a, U, V>
+where
+    U: UGraph,
+    V: UGraph,
+{
+    fn domain(&self) -> &'a U {
+        self.domain
+    }
+    fn codomain(&self) -> &'a V {
+        self.codomain
+    }
+    fn map(&self, u: u32) -> u32 {
+        self.vert_maps[u as usize]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,17 +106,17 @@ mod tests {
         let cube = n_cube(2);
         let gsphere_graph = greene_sphere();
 
-        let id_2cube = GraphMap::try_new(&cube, &cube, vec![0, 1, 2, 3]);
+        let id_2cube = VertGraphMap::try_new(&cube, &cube, vec![0, 1, 2, 3]);
         assert!(id_2cube.is_ok());
 
-        let id_2gsphere = GraphMap::try_new(
+        let id_2gsphere = VertGraphMap::try_new(
             &gsphere_graph,
             &gsphere_graph,
             (0..gsphere_graph.n()).collect(),
         );
         assert!(id_2gsphere.is_ok());
 
-        let neg_gsphere = GraphMap::try_new(
+        let neg_gsphere = VertGraphMap::try_new(
             &gsphere_graph,
             &gsphere_graph,
             (0..gsphere_graph.n()).rev().collect(),
@@ -111,7 +139,7 @@ mod tests {
         // - But f(0)=0 and f(1)=3, and (0,3) is NOT an edge in 2-cube
         //   (0=00b and 3=11b differ by 2 bits, not 1)
         let mapping = vec![0, 3, 1, 2];
-        let invalid_map = GraphMap::try_new(&cube, &cube, mapping.clone());
+        let invalid_map = VertGraphMap::try_new(&cube, &cube, mapping.clone());
 
         match invalid_map {
             Err(GraphMapError::BadEdge(_v1, _v2)) => {
@@ -135,7 +163,7 @@ mod tests {
 
         // 2-cube has 4 vertices, but we provide only 3 mappings
         let mapping = vec![0, 1, 2];
-        let invalid_map = GraphMap::try_new(&cube, &cube, mapping.clone());
+        let invalid_map = VertGraphMap::try_new(&cube, &cube, mapping.clone());
 
         match invalid_map {
             Err(GraphMapError::InvalidMap(_msg)) => {
@@ -167,7 +195,7 @@ mod tests {
         // Try to map 2-cube (4 vertices) to 3-cube (8 vertices) with a vertex out of range
         // Using vertex 10 which doesn't exist in the 3-cube (only has vertices 0-7)
         let mapping = vec![0, 1, 2, 10];
-        let invalid_map = GraphMap::try_new(&cube2, &cube3, mapping.clone());
+        let invalid_map = VertGraphMap::try_new(&cube2, &cube3, mapping.clone());
 
         match invalid_map {
             Err(GraphMapError::InvalidMap(_msg)) => {

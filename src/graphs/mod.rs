@@ -1,6 +1,5 @@
 pub mod cube;
 pub mod extras;
-pub mod graph_map;
 
 use std::convert::TryFrom;
 pub type AdjMatrix = Vec<Vec<bool>>;
