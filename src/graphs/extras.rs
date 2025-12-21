@@ -34,11 +34,11 @@ mod tests {
             let s = if i % 2 == 0 { 0 } else { n - 1 };
             assert_eq!(greene_sphere.degree(i), 4);
             assert!(
-                greene_sphere.is_neighbor(i, prev),
+                greene_sphere.is_edge(i, prev),
                 "{i}, {prev} were not neighbors"
             );
-            assert!(greene_sphere.is_neighbor(i, next));
-            assert!(greene_sphere.is_neighbor(i, s));
+            assert!(greene_sphere.is_edge(i, next));
+            assert!(greene_sphere.is_edge(i, s));
         }
     }
 }

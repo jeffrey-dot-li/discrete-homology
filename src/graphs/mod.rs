@@ -1,5 +1,6 @@
 pub mod cube;
 pub mod extras;
+pub mod graph_map;
 
 use std::convert::TryFrom;
 pub type AdjMatrix = Vec<Vec<bool>>;
@@ -14,7 +15,7 @@ pub trait UGraph: TryFrom<AdjMatrix> + Into<AdjMatrix> {
     fn degree(&self, v: u32) -> u32 {
         self.neighbors(v).len() as u32
     }
-    fn is_neighbor<V>(&self, a: V, b: V) -> bool
+    fn is_edge<V>(&self, a: V, b: V) -> bool
     where
         V: Into<u32>,
     {
@@ -127,11 +128,7 @@ impl From<CSRGraph> for AdjMatrix {
         let n = value.offsets.len() - 1;
         let mut mat = vec![vec![false; n]; n];
 
-        // Fixed
-        // Add self-loops and edges from neighbors
         for (i, row) in mat.iter_mut().enumerate() {
-            row[i] = true; // Self-loop (required but not explicitly stored in CSR)
-
             let start = value.offsets[i] as usize;
             let end = value.offsets[i + 1] as usize;
             for &neighbor in &value.neighbor_list[start..end] {
