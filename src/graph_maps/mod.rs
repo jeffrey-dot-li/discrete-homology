@@ -169,7 +169,7 @@ mod tests {
             Err(GraphMapError::InvalidMap(_msg)) => {
                 // Expected error
             }
-            Err(GraphMapError::BadEdge(v1, v2, m1, m2)) => {
+            Err(GraphMapError::BadEdge(v1, v2, _m1, _m2)) => {
                 panic!(
                     "Expected InvalidMap (wrong length), got BadEdge({v1}, {v2}).\n\
                      Mapping length: {}, Domain vertices: {}",
@@ -201,7 +201,7 @@ mod tests {
             Err(GraphMapError::InvalidMap(_msg)) => {
                 // Expected error
             }
-            Err(GraphMapError::BadEdge(v1, v2, m1, m2)) => {
+            Err(GraphMapError::BadEdge(_v1, _v2, _m1, _m2)) => {
                 panic!(
                     "Expected InvalidMap (out of range), got {invalid_map:?}.\n\
                      Mapping: {mapping:?}, Codomain vertices: 0-{}",
