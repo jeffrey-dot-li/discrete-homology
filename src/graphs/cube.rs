@@ -32,8 +32,7 @@ impl<D: Dim> From<CubeGraph<D>> for AdjMatrix {
 }
 
 impl<D: Dim> GraphNeighbors for CubeGraph<D> {
-    fn neighbors<'a>(&'a self, v: u32) -> impl Iterator<Item = u32> + 'a {
-        let n = 2_u32.pow(self.n.size());
+    fn neighbors(&self, v: u32) -> impl Iterator<Item = u32> {
         let mut items = ((-1i32)..(self.n.size() as i32))
             .map(move |i| {
                 if i < 0 {
@@ -41,7 +40,7 @@ impl<D: Dim> GraphNeighbors for CubeGraph<D> {
                 }
 
                 // Change one bit at the ith position
-                (2u32.pow(i as u32) ^ v)
+                2u32.pow(i as u32) ^ v
             })
             .collect::<Vec<_>>();
         items.sort();
@@ -53,7 +52,7 @@ impl<D: Dim> UGraph for CubeGraph<D> {
         2_u32.pow(self.n.size())
     }
 
-    fn degree(&self, v: u32) -> u32 {
+    fn degree(&self, _v: u32) -> u32 {
         self.n.size()
     }
 
@@ -61,14 +60,6 @@ impl<D: Dim> UGraph for CubeGraph<D> {
         let a: u32 = a.into();
         let b: u32 = b.into();
         a == b || cube_share_edge(a as usize, b as usize)
-    }
-}
-
-fn ordered(a: usize, b: usize) -> (usize, usize) {
-    if a <= b {
-        (a, b)
-    } else {
-        (b, a)
     }
 }
 
@@ -112,7 +103,7 @@ mod tests {
         ];
         let expected_neighbors = expected
             .iter()
-            .map(|(v, neighbors)| neighbors.clone())
+            .map(|(_v, neighbors)| neighbors.clone())
             .collect::<Vec<_>>();
 
         let cube_neighbors = (0..4)
@@ -144,8 +135,8 @@ mod tests {
         }
 
         // Check all self-loops are present (diagonal is true)
-        for i in 0..n {
-            assert!(adj_matrix[i][i], "Self-loop must exist at ({i}, {i})");
+        for (i, row) in adj_matrix.iter().enumerate() {
+            assert!(row[i], "Self-loop must exist at ({i}, {i})");
         }
 
         // Check symmetry
@@ -159,13 +150,13 @@ mod tests {
         }
 
         // Check edges are correct (vertices differ by one bit should be connected)
-        for i in 0..n {
-            for j in 0..n {
+        for (i, row) in adj_matrix.iter().enumerate() {
+            for (j, is_connected) in row.iter().enumerate() {
                 let should_be_connected = i == j || cube_share_edge(i, j);
                 assert_eq!(
-                    adj_matrix[i][j], should_be_connected,
+                    *is_connected, should_be_connected,
                     "Edge ({i}, {j}): expected {should_be_connected}, got {}",
-                    adj_matrix[i][j]
+                    *is_connected
                 );
             }
         }
