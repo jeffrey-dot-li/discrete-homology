@@ -5,6 +5,7 @@ pub mod shape;
 pub mod prelude {
     pub use crate::graphs::*;
     pub use crate::shape::*;
+    pub use std::convert::*;
 }
 
 fn main() {

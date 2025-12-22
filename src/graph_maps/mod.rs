@@ -2,23 +2,23 @@ pub mod cube_maps;
 use crate::prelude::*;
 use std::fmt::Debug;
 
-pub trait GraphMap<'a, U, V>
+pub trait GraphMap<'u, 'v, U, V>
 where
     U: UGraph,
     V: UGraph,
 {
-    fn domain(&self) -> &'a U;
-    fn codomain(&self) -> &'a V;
+    fn domain(&self) -> &'u U;
+    fn codomain(&self) -> &'v V;
     fn map(&self, u: u32) -> u32;
 }
 #[derive(Debug)]
-pub struct VertGraphMap<'a, U, V>
+pub struct VertGraphMap<'u, 'v, U, V>
 where
     U: UGraph,
     V: UGraph,
 {
-    domain: &'a U,
-    codomain: &'a V,
+    domain: &'u U,
+    codomain: &'v V,
     vert_maps: Vec<u32>,
 }
 #[derive(Debug)]
@@ -27,14 +27,14 @@ pub enum GraphMapError {
     InvalidMap(String),
 }
 
-impl<'a, U, V> VertGraphMap<'a, U, V>
+impl<'u, 'v, U, V> VertGraphMap<'u, 'v, U, V>
 where
     U: UGraph,
     V: UGraph,
 {
     pub fn try_new(
-        domain: &'a U,
-        codomain: &'a V,
+        domain: &'u U,
+        codomain: &'v V,
         vert_maps: Vec<u32>,
     ) -> Result<Self, GraphMapError> {
         use GraphMapError as E;
@@ -79,15 +79,15 @@ where
     }
 }
 
-impl<'a, U, V> GraphMap<'a, U, V> for VertGraphMap<'a, U, V>
+impl<'u, 'v, U, V> GraphMap<'u, 'v, U, V> for VertGraphMap<'u, 'v, U, V>
 where
     U: UGraph,
     V: UGraph,
 {
-    fn domain(&self) -> &'a U {
+    fn domain(&self) -> &'u U {
         self.domain
     }
-    fn codomain(&self) -> &'a V {
+    fn codomain(&self) -> &'v V {
         self.codomain
     }
     fn map(&self, u: u32) -> u32 {
