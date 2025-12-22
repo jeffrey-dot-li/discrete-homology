@@ -4,24 +4,29 @@ use crate::shape::{Const, Dim};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CubeGraph<D: Dim> {
-    n: D,
+    dim: D,
+}
+impl<D: Dim> CubeGraph<D> {
+    pub fn dim(&self) -> D {
+        self.dim
+    }
 }
 
 impl<const N: u32> Default for CubeGraph<Const<N>> {
     fn default() -> Self {
-        Self { n: Const::<N> }
+        Self { dim: Const::<N> }
     }
 }
 
 impl CubeGraph<u32> {
     pub fn new(n: u32) -> Self {
-        Self { n }
+        Self { dim: n }
     }
 }
 
 impl<D: Dim> From<CubeGraph<D>> for AdjMatrix {
     fn from(value: CubeGraph<D>) -> Self {
-        let n = value.n.size();
+        let n = value.dim.size();
         let verts = 2_usize.pow(n);
         let mut adj: AdjMatrix = vec![vec![false; verts]; verts];
         for i in 0..verts {
@@ -39,7 +44,7 @@ impl<D: Dim> From<CubeGraph<D>> for AdjMatrix {
 
 impl<D: Dim> GraphNeighbors for CubeGraph<D> {
     fn neighbors(&self, v: u32) -> impl Iterator<Item = u32> {
-        let mut items = ((-1i32)..(self.n.size() as i32))
+        let mut items = ((-1i32)..(self.dim.size() as i32))
             .map(move |i| {
                 if i < 0 {
                     return v;
@@ -55,11 +60,11 @@ impl<D: Dim> GraphNeighbors for CubeGraph<D> {
 }
 impl<D: Dim> UGraph for CubeGraph<D> {
     fn n(&self) -> u32 {
-        2_u32.pow(self.n.size())
+        2_u32.pow(self.dim.size())
     }
 
     fn degree(&self, _v: u32) -> u32 {
-        self.n.size()
+        self.dim.size()
     }
 
     fn is_edge<V: Into<u32>>(&self, a: V, b: V) -> bool {
