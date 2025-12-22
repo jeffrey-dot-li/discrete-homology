@@ -1,6 +1,6 @@
-use crate::graphs::{AdjMatrix, CSRGraph, UGraph};
+use crate::graphs::{AdjMatrix, UGraph};
 use crate::prelude::*;
-use crate::shape::{Const, ConstDim, Dim};
+use crate::shape::{Const, Dim};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CubeGraph<D: Dim> {
@@ -13,9 +13,9 @@ impl<const N: u32> Default for CubeGraph<Const<N>> {
     }
 }
 
-impl<D: Dim> Into<AdjMatrix> for CubeGraph<D> {
-    fn into(self) -> AdjMatrix {
-        let n = self.n.size();
+impl<D: Dim> From<CubeGraph<D>> for AdjMatrix {
+    fn from(value: CubeGraph<D>) -> Self {
+        let n = value.n.size();
         let verts = 2_usize.pow(n);
         let mut adj: AdjMatrix = vec![vec![false; verts]; verts];
         for i in 0..verts {
