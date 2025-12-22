@@ -13,6 +13,12 @@ impl<const N: u32> Default for CubeGraph<Const<N>> {
     }
 }
 
+impl CubeGraph<u32> {
+    pub fn new(n: u32) -> Self {
+        Self { n }
+    }
+}
+
 impl<D: Dim> From<CubeGraph<D>> for AdjMatrix {
     fn from(value: CubeGraph<D>) -> Self {
         let n = value.n.size();
