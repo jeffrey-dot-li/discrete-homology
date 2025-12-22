@@ -1,6 +1,5 @@
-use crate::graphs::{AdjMatrix, CSRGraph, UGraph};
-
-pub fn greene_sphere() -> impl UGraph {
+use crate::prelude::*;
+pub fn greene_sphere() -> CSRGraph {
     let t = true;
     let f = false;
     let adj: AdjMatrix = vec![
@@ -21,12 +20,19 @@ pub fn greene_sphere() -> impl UGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn test_greene_sphere() {
         let greene_sphere = greene_sphere();
         let n = greene_sphere.n();
-        assert_eq!(greene_sphere.neighbors(0u32), &[0, 2, 4, 6, 8]);
-        assert_eq!(greene_sphere.neighbors(n - 1), &[1, 3, 5, 7, 9]);
+        assert_eq!(
+            (greene_sphere.neighbors(0u32)).collect::<Vec<_>>(),
+            vec![0, 2, 4, 6, 8]
+        );
+        assert_eq!(
+            greene_sphere.neighbors(n - 1).collect::<Vec<_>>(),
+            vec![1, 3, 5, 7, 9]
+        );
 
         for i in 1..n - 1 {
             let prev = (i + n - 3) % ((n - 2) as i32) as u32 + 1;

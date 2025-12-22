@@ -1,5 +1,5 @@
 pub mod cube_maps;
-use crate::graphs::UGraph;
+use crate::prelude::*;
 use std::fmt::Debug;
 
 pub trait GraphMap<'a, U, V>
@@ -23,7 +23,7 @@ where
 }
 #[derive(Debug)]
 pub enum GraphMapError {
-    BadEdge(u32, u32),
+    BadEdge(u32, u32, u32, u32),
     InvalidMap(String),
 }
 
@@ -57,7 +57,7 @@ where
                 )));
             }
             let neighbors = domain.neighbors(i);
-            for &neighbor in neighbors {
+            for neighbor in neighbors {
                 // We only need to check for neighbor < i
                 // neighbor == i is guarenteed because codomain is a valid UGraph
                 // We guarentee checking for neighbor > i because is_edge(i, neighbor) == is_edge(neighbor, i)
@@ -65,7 +65,7 @@ where
                 if neighbor < i {
                     let mapped_neighbor = vert_maps[neighbor as usize];
                     if !codomain.is_edge(mapped_neighbor, mapped) {
-                        return Err(E::BadEdge(i, neighbor));
+                        return Err(E::BadEdge(i, neighbor, mapped, mapped_neighbor));
                     }
                 }
             }
@@ -98,16 +98,16 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphs::cube::n_cube;
+    use crate::graphs::cube::CubeGraph;
     use crate::graphs::extras::greene_sphere;
 
     #[test]
     fn test_graph_map() {
-        let cube = n_cube(2);
+        let cube = CubeGraph::<Const<2>>::default();
         let gsphere_graph = greene_sphere();
 
         let id_2cube = VertGraphMap::try_new(&cube, &cube, vec![0, 1, 2, 3]);
-        assert!(id_2cube.is_ok());
+        assert!(id_2cube.is_ok(), "{:?}", id_2cube);
 
         let id_2gsphere = VertGraphMap::try_new(
             &gsphere_graph,
@@ -126,7 +126,7 @@ mod tests {
 
     #[test]
     fn test_graph_map_bad_edge() {
-        let cube = n_cube(2);
+        let cube = CubeGraph::<Const<2>>::default();
 
         // 2-cube vertices and their neighbors:
         // 0: [0,1,2] (connected to 1 and 2, differs by one bit)
@@ -142,7 +142,7 @@ mod tests {
         let invalid_map = VertGraphMap::try_new(&cube, &cube, mapping.clone());
 
         match invalid_map {
-            Err(GraphMapError::BadEdge(_v1, _v2)) => {
+            Err(GraphMapError::BadEdge(_v1, _v2, _m1, _m2)) => {
                 // Expected error
             }
             Err(GraphMapError::InvalidMap(msg)) => {
@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn test_graph_map_invalid_length() {
-        let cube = n_cube(2);
+        let cube = CubeGraph::<Const<2>>::default();
 
         // 2-cube has 4 vertices, but we provide only 3 mappings
         let mapping = vec![0, 1, 2];
@@ -169,7 +169,7 @@ mod tests {
             Err(GraphMapError::InvalidMap(_msg)) => {
                 // Expected error
             }
-            Err(GraphMapError::BadEdge(v1, v2)) => {
+            Err(GraphMapError::BadEdge(v1, v2, m1, m2)) => {
                 panic!(
                     "Expected InvalidMap (wrong length), got BadEdge({v1}, {v2}).\n\
                      Mapping length: {}, Domain vertices: {}",
@@ -189,8 +189,8 @@ mod tests {
 
     #[test]
     fn test_graph_map_out_of_range() {
-        let cube2 = n_cube(2);
-        let cube3 = n_cube(3);
+        let cube2 = CubeGraph::<Const<2>>::default();
+        let cube3 = CubeGraph::<Const<3>>::default();
 
         // Try to map 2-cube (4 vertices) to 3-cube (8 vertices) with a vertex out of range
         // Using vertex 10 which doesn't exist in the 3-cube (only has vertices 0-7)
@@ -201,9 +201,9 @@ mod tests {
             Err(GraphMapError::InvalidMap(_msg)) => {
                 // Expected error
             }
-            Err(GraphMapError::BadEdge(v1, v2)) => {
+            Err(GraphMapError::BadEdge(v1, v2, m1, m2)) => {
                 panic!(
-                    "Expected InvalidMap (out of range), got BadEdge({v1}, {v2}).\n\
+                    "Expected InvalidMap (out of range), got {invalid_map:?}.\n\
                      Mapping: {mapping:?}, Codomain vertices: 0-{}",
                     cube3.n() - 1
                 );

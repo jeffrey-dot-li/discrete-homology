@@ -1,28 +1,85 @@
 use crate::graphs::{AdjMatrix, CSRGraph, UGraph};
+use crate::prelude::*;
+use crate::shape::{Const, ConstDim, Dim};
 
-pub struct CubeGraph {
-    g: CSRGraph,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CubeGraph<D: Dim> {
+    n: D,
 }
-pub fn differ_by_one_bit(a: usize, b: usize) -> bool {
-    let x: usize = a ^ b;
-    x.is_power_of_two()
+
+impl<const N: u32> Default for CubeGraph<Const<N>> {
+    fn default() -> Self {
+        Self { n: Const::<N> }
+    }
 }
 
-pub fn n_cube(n: usize) -> impl UGraph {
-    let verts = 2_usize.pow(n as u32);
-
-    let mut adj: AdjMatrix = vec![vec![false; verts]; verts];
-
-    for i in 0..verts {
-        adj[i][i] = true;
-        for j in (i + 1)..verts {
-            if differ_by_one_bit(i, j) {
-                adj[i][j] = true;
-                adj[j][i] = true;
+impl<D: Dim> Into<AdjMatrix> for CubeGraph<D> {
+    fn into(self) -> AdjMatrix {
+        let n = self.n.size();
+        let verts = 2_usize.pow(n);
+        let mut adj: AdjMatrix = vec![vec![false; verts]; verts];
+        for i in 0..verts {
+            adj[i][i] = true;
+            for j in (i + 1)..verts {
+                if cube_share_edge(i, j) {
+                    adj[i][j] = true;
+                    adj[j][i] = true;
+                }
             }
         }
+        adj
     }
-    CSRGraph::try_from(adj).unwrap()
+}
+
+impl<D: Dim> GraphNeighbors for CubeGraph<D> {
+    fn neighbors<'a>(&'a self, v: u32) -> impl Iterator<Item = u32> + 'a {
+        let n = 2_u32.pow(self.n.size());
+        let mut items = ((-1i32)..(self.n.size() as i32))
+            .map(move |i| {
+                if i < 0 {
+                    return v;
+                }
+
+                // Change one bit at the ith position
+                (2u32.pow(i as u32) ^ v)
+            })
+            .collect::<Vec<_>>();
+        items.sort();
+        items.into_iter()
+    }
+}
+impl<D: Dim> UGraph for CubeGraph<D> {
+    fn n(&self) -> u32 {
+        2_u32.pow(self.n.size())
+    }
+
+    fn degree(&self, v: u32) -> u32 {
+        self.n.size()
+    }
+
+    fn is_edge<V: Into<u32>>(&self, a: V, b: V) -> bool {
+        let a: u32 = a.into();
+        let b: u32 = b.into();
+        a == b || cube_share_edge(a as usize, b as usize)
+    }
+}
+
+fn ordered(a: usize, b: usize) -> (usize, usize) {
+    if a <= b {
+        (a, b)
+    } else {
+        (b, a)
+    }
+}
+
+pub fn cube_share_edge(a: usize, b: usize) -> bool {
+    if a == b {
+        return true;
+    }
+    // let (a, b) = ordered(a, b);
+
+    let x: usize = a ^ b;
+    x.is_power_of_two()
 }
 
 #[cfg(test)]
@@ -32,17 +89,49 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_differ_by_one_bit() {
+        // assert!(differ_by_one_bit(0, 0));
+        assert!(cube_share_edge(0, 1));
+        assert!(cube_share_edge(1, 0));
+        assert!(cube_share_edge(3, 1));
+        assert!(!cube_share_edge(1, 2));
+    }
+
+    #[test]
     fn test_n_cube() {
-        let cube = n_cube(2);
-        assert_eq!(cube.neighbors(0u32), &[0, 1, 2]);
-        assert_eq!(cube.neighbors(1u32), &[0, 1, 3]);
-        assert_eq!(cube.neighbors(2u32), &[0, 2, 3]);
-        assert_eq!(cube.neighbors(3u32), &[1, 2, 3]);
+        let cube = CubeGraph::<Const<2>>::default();
+
+        assert_eq!(cube.n(), 4);
+
+        // Define expected neighbors for each vertex
+        let expected = [
+            (0u32, vec![0, 1, 2]),
+            (1u32, vec![0, 1, 3]),
+            (2u32, vec![0, 2, 3]),
+            (3u32, vec![1, 2, 3]),
+        ];
+        let expected_neighbors = expected
+            .iter()
+            .map(|(v, neighbors)| neighbors.clone())
+            .collect::<Vec<_>>();
+
+        let cube_neighbors = (0..4)
+            .map(|v| cube.neighbors(v).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+
+        assert_eq!(cube_neighbors, expected_neighbors);
+        // Check that all edges match expectations using is_edge
+        assert!(
+            expected.iter().all(|(v, neighbors)| {
+                (0..4).all(|n| cube.is_edge(*v, n) == neighbors.contains(&n))
+            }),
+            "Edge structure doesn't match expected 2-cube connectivity"
+        );
     }
 
     #[test]
     fn test_into_adj_matrix() {
-        let cube = n_cube(3);
+        let cube = CubeGraph::<Const<3>>::default();
         let n = cube.n() as usize;
 
         // Convert CSRGraph to AdjMatrix
@@ -72,7 +161,7 @@ mod tests {
         // Check edges are correct (vertices differ by one bit should be connected)
         for i in 0..n {
             for j in 0..n {
-                let should_be_connected = i == j || differ_by_one_bit(i, j);
+                let should_be_connected = i == j || cube_share_edge(i, j);
                 assert_eq!(
                     adj_matrix[i][j], should_be_connected,
                     "Edge ({i}, {j}): expected {should_be_connected}, got {}",
@@ -85,7 +174,7 @@ mod tests {
     #[test]
     fn test_roundtrip_conversion() {
         // Test that AdjMatrix -> CSRGraph -> AdjMatrix preserves the structure
-        let original_cube = n_cube(2);
+        let original_cube = CubeGraph::<Const<2>>::default();
         let adj1: AdjMatrix = original_cube.into();
 
         let csr = CSRGraph::try_from(adj1.clone()).expect("Should convert to CSRGraph");

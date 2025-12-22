@@ -4,24 +4,44 @@ pub mod extras;
 use std::convert::TryFrom;
 pub type AdjMatrix = Vec<Vec<bool>>;
 
+pub trait GraphNeighbors {
+    fn neighbors<'a>(&'a self, v: u32) -> impl Iterator<Item = u32> + 'a;
+}
+
 // Simple Undirected Graph
-pub trait UGraph: TryFrom<AdjMatrix> + Into<AdjMatrix> {
-    fn neighbors<V>(&self, v: V) -> &[u32]
-    where
-        V: Into<u32>;
+pub trait UGraph: Into<AdjMatrix> + GraphNeighbors {
     fn n(&self) -> u32;
 
-    fn degree(&self, v: u32) -> u32 {
-        self.neighbors(v).len() as u32
-    }
+    fn degree(&self, v: u32) -> u32;
     fn is_edge<V>(&self, a: V, b: V) -> bool
     where
-        V: Into<u32>,
-    {
-        // This is actually suboptimal because we know that neighbors is sorted
-        self.neighbors(a).contains(&b.into())
+        V: Into<u32>;
+}
+
+trait MaterializedUGraph: TryFrom<AdjMatrix> {
+    fn slice_neighbors<V: Into<u32>>(&self, v: V) -> &[u32];
+    fn _n(&self) -> u32;
+}
+
+impl<T: MaterializedUGraph> GraphNeighbors for T {
+    fn neighbors<'a>(&'a self, v: u32) -> impl Iterator<Item = u32> + 'a {
+        self.slice_neighbors(v).iter().copied()
     }
 }
+
+impl<T: MaterializedUGraph + Into<AdjMatrix> + GraphNeighbors> UGraph for T {
+    fn is_edge<V: Into<u32>>(&self, a: V, b: V) -> bool {
+        return self.slice_neighbors(a).contains(&b.into());
+    }
+    fn degree(&self, v: u32) -> u32 {
+        self.slice_neighbors(v).len() as u32
+    }
+
+    fn n(&self) -> u32 {
+        self._n()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CSRGraph {
     offsets: Vec<u32>,
@@ -139,18 +159,15 @@ impl From<CSRGraph> for AdjMatrix {
     }
 }
 
-impl UGraph for CSRGraph {
-    fn neighbors<V>(&self, v: V) -> &[u32]
-    where
-        V: Into<u32>,
-    {
+impl MaterializedUGraph for CSRGraph {
+    fn slice_neighbors<V: Into<u32>>(&self, v: V) -> &[u32] {
         let v: u32 = v.into();
         let start = self.offsets[v as usize] as usize;
         let end = self.offsets[(v + 1) as usize] as usize;
         &self.neighbor_list[start..end]
     }
 
-    fn n(&self) -> u32 {
+    fn _n(&self) -> u32 {
         (self.offsets.len() - 1) as u32
     }
 }
@@ -279,7 +296,7 @@ mod tests {
 
                 // Verify the graph structure matches the matrix
                 for i in 0..3u32 {
-                    let neighbors = graph.neighbors(i);
+                    let neighbors = graph.slice_neighbors(i);
 
                     for j in 0..3u32 {
                         let should_be_neighbor = mat[i as usize][j as usize];
