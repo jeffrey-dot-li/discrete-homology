@@ -1,7 +1,7 @@
 pub mod cube;
 pub mod extras;
-
 use std::convert::TryFrom;
+use std::fmt::Debug;
 pub type AdjMatrix = Vec<Vec<bool>>;
 
 pub trait GraphNeighbors {
@@ -9,7 +9,7 @@ pub trait GraphNeighbors {
 }
 
 // Simple Undirected Graph
-pub trait UGraph: Into<AdjMatrix> + GraphNeighbors {
+pub trait UGraph: Into<AdjMatrix> + GraphNeighbors + Clone + Debug {
     fn n(&self) -> u32;
 
     fn degree(&self, v: u32) -> u32;
@@ -29,7 +29,7 @@ impl<T: MaterializedUGraph> GraphNeighbors for T {
     }
 }
 
-impl<T: MaterializedUGraph + Into<AdjMatrix> + GraphNeighbors> UGraph for T {
+impl<T: MaterializedUGraph + Into<AdjMatrix> + GraphNeighbors + Clone + Debug> UGraph for T {
     fn is_edge<V: Into<u32>>(&self, a: V, b: V) -> bool {
         return self.slice_neighbors(a).contains(&b.into());
     }

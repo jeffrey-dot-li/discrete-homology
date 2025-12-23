@@ -1,14 +1,15 @@
 pub mod cube_maps;
 use crate::prelude::*;
+use std::borrow::Cow;
 use std::fmt::Debug;
 
-pub trait GraphMap<'u, 'v, U, V>
+pub trait GraphMap<U, V>
 where
     U: UGraph,
     V: UGraph,
 {
-    fn domain(&self) -> &'u U;
-    fn codomain(&self) -> &'v V;
+    fn domain(&self) -> &U;
+    fn codomain(&self) -> &V;
     fn map(&self, u: u32) -> u32;
 }
 #[derive(Debug)]
@@ -17,8 +18,8 @@ where
     U: UGraph,
     V: UGraph,
 {
-    domain: &'u U,
-    codomain: &'v V,
+    domain: Cow<'u, U>,
+    codomain: Cow<'v, V>,
     vert_maps: Vec<u32>,
 }
 #[derive(Debug)]
@@ -33,11 +34,13 @@ where
     V: UGraph,
 {
     pub fn try_new(
-        domain: &'u U,
-        codomain: &'v V,
-        vert_maps: Vec<u32>,
+        domain: impl Into<Cow<'u, U>>,
+        codomain: impl Into<Cow<'v, V>>,
+        vert_maps: &[u32],
     ) -> Result<Self, GraphMapError> {
         use GraphMapError as E;
+        let domain = domain.into();
+        let codomain = codomain.into();
         if vert_maps.len() != domain.n() as usize {
             return Err(E::InvalidMap(format!(
                 "invalid map: len {:?} != {:?}",
@@ -74,21 +77,21 @@ where
         Ok(Self {
             domain,
             codomain,
-            vert_maps,
+            vert_maps: vert_maps.to_vec(),
         })
     }
 }
 
-impl<'u, 'v, U, V> GraphMap<'u, 'v, U, V> for VertGraphMap<'u, 'v, U, V>
+impl<U, V> GraphMap<U, V> for VertGraphMap<'_, '_, U, V>
 where
     U: UGraph,
     V: UGraph,
 {
-    fn domain(&self) -> &'u U {
-        self.domain
+    fn domain(&self) -> &U {
+        self.domain.as_ref()
     }
-    fn codomain(&self) -> &'v V {
-        self.codomain
+    fn codomain(&self) -> &V {
+        self.codomain.as_ref()
     }
     fn map(&self, u: u32) -> u32 {
         self.vert_maps[u as usize]
@@ -106,20 +109,24 @@ mod tests {
         let cube = CubeGraph::<Const<2>>::default();
         let gsphere_graph = greene_sphere();
 
-        let id_2cube = VertGraphMap::try_new(&cube, &cube, vec![0, 1, 2, 3]);
+        let id_2cube = VertGraphMap::try_new(
+            Cow::Borrowed(&cube),
+            Cow::Borrowed(&cube),
+            &((0..cube.n()).collect::<Vec<u32>>()),
+        );
         assert!(id_2cube.is_ok(), "{:?}", id_2cube);
 
         let id_2gsphere = VertGraphMap::try_new(
-            &gsphere_graph,
-            &gsphere_graph,
-            (0..gsphere_graph.n()).collect(),
+            Cow::Borrowed(&gsphere_graph),
+            Cow::Borrowed(&gsphere_graph),
+            &(0..gsphere_graph.n()).collect::<Vec<_>>(),
         );
         assert!(id_2gsphere.is_ok());
 
         let neg_gsphere = VertGraphMap::try_new(
-            &gsphere_graph,
-            &gsphere_graph,
-            (0..gsphere_graph.n()).rev().collect(),
+            Cow::Borrowed(&gsphere_graph),
+            Cow::Borrowed(&gsphere_graph),
+            &(0..gsphere_graph.n()).rev().collect::<Vec<u32>>(),
         );
         assert!(neg_gsphere.is_ok());
     }
@@ -139,7 +146,8 @@ mod tests {
         // - But f(0)=0 and f(1)=3, and (0,3) is NOT an edge in 2-cube
         //   (0=00b and 3=11b differ by 2 bits, not 1)
         let mapping = vec![0, 3, 1, 2];
-        let invalid_map = VertGraphMap::try_new(&cube, &cube, mapping.clone());
+        let invalid_map =
+            VertGraphMap::try_new(Cow::Borrowed(&cube), Cow::Borrowed(&cube), &mapping);
 
         match invalid_map {
             Err(GraphMapError::BadEdge(_v1, _v2, _m1, _m2)) => {
@@ -163,7 +171,8 @@ mod tests {
 
         // 2-cube has 4 vertices, but we provide only 3 mappings
         let mapping = vec![0, 1, 2];
-        let invalid_map = VertGraphMap::try_new(&cube, &cube, mapping.clone());
+        let invalid_map =
+            VertGraphMap::try_new(Cow::Borrowed(&cube), Cow::Borrowed(&cube), &mapping);
 
         match invalid_map {
             Err(GraphMapError::InvalidMap(_msg)) => {
@@ -195,7 +204,8 @@ mod tests {
         // Try to map 2-cube (4 vertices) to 3-cube (8 vertices) with a vertex out of range
         // Using vertex 10 which doesn't exist in the 3-cube (only has vertices 0-7)
         let mapping = vec![0, 1, 2, 10];
-        let invalid_map = VertGraphMap::try_new(&cube2, &cube3, mapping.clone());
+        let invalid_map =
+            VertGraphMap::try_new(Cow::Borrowed(&cube2), Cow::Borrowed(&cube3), &mapping);
 
         match invalid_map {
             Err(GraphMapError::InvalidMap(_msg)) => {
