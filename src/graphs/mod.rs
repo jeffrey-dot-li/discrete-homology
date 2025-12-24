@@ -5,11 +5,11 @@ use std::fmt::Debug;
 pub type AdjMatrix = Vec<Vec<bool>>;
 
 pub trait GraphNeighbors {
-    fn neighbors<'a>(&'a self, v: u32) -> impl Iterator<Item = u32> + 'a;
+    fn neighbors(&self, v: u32) -> impl Iterator<Item = u32>;
 }
 
 // Simple Undirected Graph
-pub trait UGraph: Into<AdjMatrix> + GraphNeighbors + Clone + Debug {
+pub trait UGraph: Into<AdjMatrix> + GraphNeighbors + Clone + Debug + Eq {
     fn n(&self) -> u32;
 
     fn degree(&self, v: u32) -> u32;
@@ -24,14 +24,14 @@ trait MaterializedUGraph: TryFrom<AdjMatrix> {
 }
 
 impl<T: MaterializedUGraph> GraphNeighbors for T {
-    fn neighbors<'a>(&'a self, v: u32) -> impl Iterator<Item = u32> + 'a {
+    fn neighbors(&self, v: u32) -> impl Iterator<Item = u32> {
         self.slice_neighbors(v).iter().copied()
     }
 }
 
-impl<T: MaterializedUGraph + Into<AdjMatrix> + GraphNeighbors + Clone + Debug> UGraph for T {
+impl<T: MaterializedUGraph + Into<AdjMatrix> + GraphNeighbors + Clone + Debug + Eq> UGraph for T {
     fn is_edge<V: Into<u32>>(&self, a: V, b: V) -> bool {
-        return self.slice_neighbors(a).contains(&b.into());
+        self.slice_neighbors(a).contains(&b.into())
     }
     fn degree(&self, v: u32) -> u32 {
         self.slice_neighbors(v).len() as u32
@@ -42,7 +42,7 @@ impl<T: MaterializedUGraph + Into<AdjMatrix> + GraphNeighbors + Clone + Debug> U
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CSRGraph {
     offsets: Vec<u32>,
     neighbor_list: Vec<u32>,

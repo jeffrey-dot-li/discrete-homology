@@ -1,10 +1,12 @@
+use std::borrow::Cow;
+
 use crate::graph_maps::{GraphMapError, VertGraphMap};
 use crate::graphs::cube::CubeGraph;
 use crate::graphs::UGraph;
 use crate::prelude::*;
 
 #[derive(Debug)]
-struct CubeMap<'u, 'v, D: Dim, V: UGraph> {
+pub struct CubeMap<'u, 'v, D: Dim, V: UGraph> {
     map: VertGraphMap<'u, 'v, CubeGraph<D>, V>,
     // degenerate_indices: Vec<bool>,
 }
@@ -38,8 +40,40 @@ impl<'u, 'v, V: UGraph> CubeMap<'u, 'v, u32, V> {
     pub fn try_combine<'w>(
         &self,
         other: &CubeMap<'w, 'v, u32, V>,
-        combined: &'w CubeGraph<u32>,
-    ) -> Result<CubeMap<'w, 'v, u32, V>, GraphMapError> {
-        panic!("Not implemented")
+    ) -> Result<CubeMap<'w, 'v, u32, V>, GraphMapError>
+    where
+        'u: 'w,
+    {
+        use GraphMapError as E;
+        assert!(self.map.codomain == other.map.codomain);
+        let n = self.map.domain.n();
+        for (i, (x, y)) in self
+            .map
+            .vert_maps
+            .iter()
+            .zip(other.map.vert_maps.iter())
+            .enumerate()
+        {
+            if !self.map.codomain.is_edge(*x, *y) {
+                return Err(E::BadEdge(i as u32, i as u32 + n, *x, *y));
+            }
+        }
+
+        let mut combined_verts =
+            Vec::with_capacity(self.map.vert_maps.len() + other.map.vert_maps.len());
+
+        combined_verts.extend_from_slice(&self.map.vert_maps);
+        combined_verts.extend_from_slice(&other.map.vert_maps);
+        let combined = Cow::Owned(CubeGraph::new(n + 1));
+
+        let map = unsafe {
+            VertGraphMap::new_unchecked(
+                combined,
+                // Codomain is almost certainly borrowed so this shouldn't be an issue.:where
+                self.map.codomain.clone(),
+                Cow::Owned(combined_verts),
+            )
+        };
+        Ok(Self { map })
     }
 }

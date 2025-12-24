@@ -33,6 +33,20 @@ where
     U: UGraph,
     V: UGraph,
 {
+    /// # Safety
+    ///
+    /// Yeah this doesn't actually check if vert_maps are legit
+    pub unsafe fn new_unchecked(
+        domain: impl Into<Cow<'u, U>>,
+        codomain: impl Into<Cow<'v, V>>,
+        vert_maps: Cow<'_, Vec<u32>>,
+    ) -> Self {
+        Self {
+            domain: domain.into(),
+            codomain: codomain.into(),
+            vert_maps: vert_maps.into_owned(),
+        }
+    }
     pub fn try_new(
         domain: impl Into<Cow<'u, U>>,
         codomain: impl Into<Cow<'v, V>>,
