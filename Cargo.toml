@@ -14,3 +14,9 @@ features = ["nightly"]
 default = []
 nightly = []
 
+[dev-dependencies]
+criterion = "0.8.1"
+
+[[bench]]
+name = "maps_naive"
+harness = false

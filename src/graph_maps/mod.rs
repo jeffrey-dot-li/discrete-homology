@@ -102,56 +102,6 @@ where
             vert_maps: workspace[0..n].to_vec(),
         })
     }
-
-    // pub fn try_new<'a>(
-    //     domain: impl Into<Cow<'u, U>>,
-    //     codomain: impl Into<Cow<'v, V>>,
-    //     vert_maps: impl Into<Cow<'a, [u32]>>,
-    // ) -> Result<Self, GraphMapError> {
-    //     use GraphMapError as E;
-    //     let domain = domain.into();
-    //     let codomain = codomain.into();
-    //
-    //     let vert_maps = vert_maps.into();
-    //     if vert_maps.len() != domain.n() as usize {
-    //         return Err(E::InvalidMap(format!(
-    //             "invalid map: len {:?} != {:?}",
-    //             vert_maps.len(),
-    //             domain.n()
-    //         )));
-    //     }
-    //
-    //     // This has O(domain.edges) runtime
-    //
-    //     for i in 0..domain.n() {
-    //         let mapped = vert_maps[i as usize];
-    //
-    //         if mapped >= codomain.n() {
-    //             return Err(E::InvalidMap(format!(
-    //                 "invalid map: codomain node {mapped} out of range"
-    //             )));
-    //         }
-    //         let neighbors = domain.neighbors(i);
-    //         for neighbor in neighbors {
-    //             // We only need to check for neighbor < i
-    //             // neighbor == i is guarenteed because codomain is a valid UGraph
-    //             // We guarentee checking for neighbor > i because is_edge(i, neighbor) == is_edge(neighbor, i)
-    //             // This way we don't need to check out of bounds twice
-    //             if neighbor < i {
-    //                 let mapped_neighbor = vert_maps[neighbor as usize];
-    //                 if !codomain.is_edge(mapped_neighbor, mapped) {
-    //                     return Err(E::BadEdge(i, neighbor, mapped, mapped_neighbor));
-    //                 }
-    //             }
-    //         }
-    //     }
-    //
-    //     Ok(Self {
-    //         domain,
-    //         codomain,
-    //         vert_maps: vert_maps.to_vec(),
-    //     })
-    // }
 }
 
 impl<U, V> GraphMap<U, V> for VertGraphMap<'_, '_, U, V>
