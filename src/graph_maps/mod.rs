@@ -104,6 +104,48 @@ where
     }
 }
 
+/// Increment a number represented as digits in a given base.
+/// Returns false if overflow occurs (i.e., all digits wrap around to 0).
+pub fn increment_mod_base(digits: &mut [u32], base: u32) -> bool {
+    for d in digits.iter_mut() {
+        *d += 1;
+        if *d >= base {
+            *d = 0;
+        } else {
+            return true;
+        }
+    }
+    false
+}
+
+pub fn generate_maps_naive<'u, 'v, U: UGraph, V: UGraph>(
+    source: &'u U,
+    target: &'v V,
+) -> (Vec<VertGraphMap<'u, 'v, U, V>>, u64) {
+    let n = source.n() as usize;
+    let m = target.n() as usize;
+    let total_checks = (m as u64).pow(n as u32);
+    let mut current_map = vec![0u32; n];
+    let mut maps: Vec<VertGraphMap<'u, 'v, U, V>> = Vec::new();
+    let mut workspace: Vec<u32> = vec![0; n];
+
+    for i in 0..total_checks {
+        let valid_map: Result<VertGraphMap<'u, 'v, U, V>, GraphMapError> = VertGraphMap::try_from(
+            Cow::Borrowed(source),
+            Cow::Borrowed(target),
+            current_map.iter().copied(),
+            &mut workspace,
+        );
+        if let Ok(map) = valid_map {
+            maps.push(map);
+        }
+        if !increment_mod_base(&mut current_map, m as u32) {
+            assert!(i == total_checks - 1);
+        }
+    }
+    (maps, total_checks)
+}
+
 impl<U, V> GraphMap<U, V> for VertGraphMap<'_, '_, U, V>
 where
     U: UGraph,
@@ -231,5 +273,13 @@ mod tests {
             mapping,
             &mut workspace,
         );
+    }
+
+    #[test]
+    fn test_cube2_graphs() {
+        let cube2 = CubeGraph::<Const<2>>::default();
+        let (maps, total_checks) = generate_maps_naive(&cube2, &cube2);
+        assert_eq!(total_checks, 256); // 2^2 = 4 vertices, so 4^4 = 256 total maps checked
+        assert_eq!(maps.len(), 84); // There are 24 valid graph maps from 2-cube to 2
     }
 }
