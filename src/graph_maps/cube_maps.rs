@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::graph_maps::{GraphMapError, VertGraphMap};
+use crate::graph_maps::{GraphMap, GraphMapError, VertGraphMap};
 use crate::graphs::cube::CubeGraph;
 use crate::graphs::UGraph;
 use crate::prelude::*;
@@ -75,5 +75,9 @@ impl<'u, 'v, V: UGraph> CubeMap<'u, 'v, u32, V> {
             )
         };
         Ok(Self { map })
+    }
+
+    pub fn d(i: u32, sign: bool) -> CubeMap<'u, 'v, u32, V> {
+        panic!()
     }
 }

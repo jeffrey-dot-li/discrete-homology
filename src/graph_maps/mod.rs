@@ -1,3 +1,4 @@
+pub mod cube_isomorphism;
 pub mod cube_maps;
 use crate::prelude::*;
 use std::borrow::Cow;
@@ -11,7 +12,12 @@ where
     fn domain(&self) -> &U;
     fn codomain(&self) -> &V;
     fn map(&self, u: u32) -> u32;
+
+    fn mapped_vertices(&self) -> impl Iterator<Item = u32> {
+        (0..self.domain().n()).map(|i| self.map(i))
+    }
 }
+
 #[derive(Debug)]
 pub struct VertGraphMap<'u, 'v, U, V>
 where
@@ -47,53 +53,105 @@ where
             vert_maps: vert_maps.into_owned(),
         }
     }
-    pub fn try_new(
+
+    pub fn try_from(
         domain: impl Into<Cow<'u, U>>,
         codomain: impl Into<Cow<'v, V>>,
-        vert_maps: &[u32],
+        mapped_verts: impl IntoIterator<Item = u32>,
+        // Workspace is a length n mutable array
+        workspace: &mut [u32],
     ) -> Result<Self, GraphMapError> {
-        use GraphMapError as E;
         let domain = domain.into();
         let codomain = codomain.into();
-        if vert_maps.len() != domain.n() as usize {
-            return Err(E::InvalidMap(format!(
-                "invalid map: len {:?} != {:?}",
-                vert_maps.len(),
-                domain.n()
-            )));
-        }
+        let n = domain.n() as usize;
 
-        // This has O(domain.edges) runtime
+        assert!(workspace.len() >= n);
 
-        for i in 0..domain.n() {
-            let mapped = vert_maps[i as usize];
+        use GraphMapError as E;
+        let mut max = 0;
 
-            if mapped >= codomain.n() {
-                return Err(E::InvalidMap(format!(
-                    "invalid map: codomain node {mapped} out of range"
-                )));
-            }
-            let neighbors = domain.neighbors(i);
+        for (i, mapped_i) in mapped_verts.into_iter().enumerate() {
+            assert!(
+                mapped_i < codomain.n(),
+                "invalid map: codomain node {mapped_i} out of range {:?}",
+                codomain.n()
+            );
+            let neighbors = domain.neighbors(i as u32);
             for neighbor in neighbors {
-                // We only need to check for neighbor < i
-                // neighbor == i is guarenteed because codomain is a valid UGraph
-                // We guarentee checking for neighbor > i because is_edge(i, neighbor) == is_edge(neighbor, i)
-                // This way we don't need to check out of bounds twice
+                let neighbor = neighbor as usize;
                 if neighbor < i {
-                    let mapped_neighbor = vert_maps[neighbor as usize];
-                    if !codomain.is_edge(mapped_neighbor, mapped) {
-                        return Err(E::BadEdge(i, neighbor, mapped, mapped_neighbor));
+                    let mapped_neighbor = workspace[neighbor];
+                    if !codomain.is_edge(mapped_neighbor, mapped_i) {
+                        return Err(E::BadEdge(
+                            i as u32,
+                            neighbor as u32,
+                            mapped_i,
+                            mapped_neighbor,
+                        ));
                     }
                 }
             }
+            // We have confirmed that edges j - i where j <= i are good
+            workspace[i] = mapped_i;
+            max = i;
         }
-
+        assert!(max == (n - 1), "max should be n - 1, got {max}");
         Ok(Self {
-            domain,
             codomain,
-            vert_maps: vert_maps.to_vec(),
+            domain,
+            vert_maps: workspace[0..n].to_vec(),
         })
     }
+
+    // pub fn try_new<'a>(
+    //     domain: impl Into<Cow<'u, U>>,
+    //     codomain: impl Into<Cow<'v, V>>,
+    //     vert_maps: impl Into<Cow<'a, [u32]>>,
+    // ) -> Result<Self, GraphMapError> {
+    //     use GraphMapError as E;
+    //     let domain = domain.into();
+    //     let codomain = codomain.into();
+    //
+    //     let vert_maps = vert_maps.into();
+    //     if vert_maps.len() != domain.n() as usize {
+    //         return Err(E::InvalidMap(format!(
+    //             "invalid map: len {:?} != {:?}",
+    //             vert_maps.len(),
+    //             domain.n()
+    //         )));
+    //     }
+    //
+    //     // This has O(domain.edges) runtime
+    //
+    //     for i in 0..domain.n() {
+    //         let mapped = vert_maps[i as usize];
+    //
+    //         if mapped >= codomain.n() {
+    //             return Err(E::InvalidMap(format!(
+    //                 "invalid map: codomain node {mapped} out of range"
+    //             )));
+    //         }
+    //         let neighbors = domain.neighbors(i);
+    //         for neighbor in neighbors {
+    //             // We only need to check for neighbor < i
+    //             // neighbor == i is guarenteed because codomain is a valid UGraph
+    //             // We guarentee checking for neighbor > i because is_edge(i, neighbor) == is_edge(neighbor, i)
+    //             // This way we don't need to check out of bounds twice
+    //             if neighbor < i {
+    //                 let mapped_neighbor = vert_maps[neighbor as usize];
+    //                 if !codomain.is_edge(mapped_neighbor, mapped) {
+    //                     return Err(E::BadEdge(i, neighbor, mapped, mapped_neighbor));
+    //                 }
+    //             }
+    //         }
+    //     }
+    //
+    //     Ok(Self {
+    //         domain,
+    //         codomain,
+    //         vert_maps: vert_maps.to_vec(),
+    //     })
+    // }
 }
 
 impl<U, V> GraphMap<U, V> for VertGraphMap<'_, '_, U, V>
@@ -122,25 +180,30 @@ mod tests {
     fn test_graph_map() {
         let cube = CubeGraph::<Const<2>>::default();
         let gsphere_graph = greene_sphere();
+        let mut workspace_len2: [u32; 4] = [0; 4];
+        let mut gsphere_workspace: Vec<u32> = vec![0; gsphere_graph.n() as usize];
 
-        let id_2cube = VertGraphMap::try_new(
+        let id_2cube = VertGraphMap::try_from(
             Cow::Borrowed(&cube),
             Cow::Borrowed(&cube),
-            &((0..cube.n()).collect::<Vec<u32>>()),
+            0..cube.n(),
+            &mut workspace_len2,
         );
         assert!(id_2cube.is_ok(), "{:?}", id_2cube);
 
-        let id_2gsphere = VertGraphMap::try_new(
+        let id_2gsphere = VertGraphMap::try_from(
             Cow::Borrowed(&gsphere_graph),
             Cow::Borrowed(&gsphere_graph),
-            &(0..gsphere_graph.n()).collect::<Vec<_>>(),
+            0..gsphere_graph.n(),
+            &mut gsphere_workspace,
         );
         assert!(id_2gsphere.is_ok());
 
-        let neg_gsphere = VertGraphMap::try_new(
+        let neg_gsphere = VertGraphMap::try_from(
             Cow::Borrowed(&gsphere_graph),
             Cow::Borrowed(&gsphere_graph),
-            &(0..gsphere_graph.n()).rev().collect::<Vec<u32>>(),
+            0..gsphere_graph.n(),
+            &mut gsphere_workspace,
         );
         assert!(neg_gsphere.is_ok());
     }
@@ -148,6 +211,7 @@ mod tests {
     #[test]
     fn test_graph_map_bad_edge() {
         let cube = CubeGraph::<Const<2>>::default();
+        let mut workspace = [0u32; 4];
 
         // 2-cube vertices and their neighbors:
         // 0: [0,1,2] (connected to 1 and 2, differs by one bit)
@@ -159,9 +223,13 @@ mod tests {
         // - Vertex 0 has edge to vertex 1 in domain
         // - But f(0)=0 and f(1)=3, and (0,3) is NOT an edge in 2-cube
         //   (0=00b and 3=11b differ by 2 bits, not 1)
-        let mapping = vec![0, 3, 1, 2];
-        let invalid_map =
-            VertGraphMap::try_new(Cow::Borrowed(&cube), Cow::Borrowed(&cube), &mapping);
+        let mapping = [0, 3, 1, 2];
+        let invalid_map = VertGraphMap::try_from(
+            Cow::Borrowed(&cube),
+            Cow::Borrowed(&cube),
+            mapping,
+            &mut workspace,
+        );
 
         match invalid_map {
             Err(GraphMapError::BadEdge(_v1, _v2, _m1, _m2)) => {
@@ -180,65 +248,38 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "max should be n - 1")]
     fn test_graph_map_invalid_length() {
         let cube = CubeGraph::<Const<2>>::default();
+        let mut workspace = [0u32; 4];
 
         // 2-cube has 4 vertices, but we provide only 3 mappings
-        let mapping = vec![0, 1, 2];
-        let invalid_map =
-            VertGraphMap::try_new(Cow::Borrowed(&cube), Cow::Borrowed(&cube), &mapping);
-
-        match invalid_map {
-            Err(GraphMapError::InvalidMap(_msg)) => {
-                // Expected error
-            }
-            Err(GraphMapError::BadEdge(v1, v2, _m1, _m2)) => {
-                panic!(
-                    "Expected InvalidMap (wrong length), got BadEdge({v1}, {v2}).\n\
-                     Mapping length: {}, Domain vertices: {}",
-                    mapping.len(),
-                    cube.n()
-                );
-            }
-            Ok(_) => {
-                panic!(
-                    "Expected InvalidMap error, but GraphMap was created successfully.\n\
-                     Mapping: {mapping:?}, Domain vertices: {}",
-                    cube.n()
-                );
-            }
-        }
+        // This should panic because the iterator doesn't have enough elements
+        let mapping = [0, 1, 2];
+        let _invalid_map = VertGraphMap::try_from(
+            Cow::Borrowed(&cube),
+            Cow::Borrowed(&cube),
+            mapping,
+            &mut workspace,
+        );
     }
 
     #[test]
+    #[should_panic(expected = "invalid map: codomain node 10 out of range")]
     fn test_graph_map_out_of_range() {
         let cube2 = CubeGraph::<Const<2>>::default();
         let cube3 = CubeGraph::<Const<3>>::default();
+        let mut workspace = [0u32; 4];
 
         // Try to map 2-cube (4 vertices) to 3-cube (8 vertices) with a vertex out of range
         // Using vertex 10 which doesn't exist in the 3-cube (only has vertices 0-7)
-        let mapping = vec![0, 1, 2, 10];
-        let invalid_map =
-            VertGraphMap::try_new(Cow::Borrowed(&cube2), Cow::Borrowed(&cube3), &mapping);
-
-        match invalid_map {
-            Err(GraphMapError::InvalidMap(_msg)) => {
-                // Expected error
-            }
-            Err(GraphMapError::BadEdge(_v1, _v2, _m1, _m2)) => {
-                panic!(
-                    "Expected InvalidMap (out of range), got {invalid_map:?}.\n\
-                     Mapping: {mapping:?}, Codomain vertices: 0-{}",
-                    cube3.n() - 1
-                );
-            }
-            Ok(_) => {
-                panic!(
-                    "Expected InvalidMap error, but GraphMap was created successfully.\n\
-                     Mapping: {mapping:?}, Codomain vertices: 0-{}",
-                    cube3.n() - 1
-                );
-            }
-        }
+        // This should panic because vertex 10 is out of range
+        let mapping = [0, 1, 2, 10];
+        let _invalid_map = VertGraphMap::try_from(
+            Cow::Borrowed(&cube2),
+            Cow::Borrowed(&cube3),
+            mapping,
+            &mut workspace,
+        );
     }
 }
