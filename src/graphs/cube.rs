@@ -4,6 +4,7 @@ use crate::shape::{Const, Dim};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CubeGraph<D: Dim> {
+    // Dim should be like u8, it should be the num_vertices that are : Dim.
     dim: D,
 }
 impl<D: Dim> CubeGraph<D> {
@@ -18,9 +19,22 @@ impl<const N: u32> Default for CubeGraph<Const<N>> {
     }
 }
 
-impl CubeGraph<u32> {
-    pub fn new(n: u32) -> Self {
-        Self { dim: n }
+pub trait Newable<D: Dim> {
+    fn new(dim: D) -> Self;
+}
+
+impl<const N: u32> Newable<Const<N>> for CubeGraph<Const<N>> {
+    fn new(dim: Const<N>) -> Self {
+        Self { dim }
+    }
+}
+
+impl Newable<u32> for CubeGraph<u32> {
+    fn new(dim: u32) -> Self {
+        // Prob should be u4 because we need dim! to fit in the indexing data type,
+        // 12! fits in u32, 20! fits in u64. If we use u4 then it supports up to 15 dimension cube.
+        // Min rust actual dtype is u8 which should be fine as well.
+        Self { dim }
     }
 }
 
