@@ -14,6 +14,7 @@ fn bench_my_cpu_bound(c: &mut Criterion) {
     group.bench_function(BenchmarkId::new("3cube_3cube_naive", "1e6"), |b| {
         b.iter(|| {
             // time:   [2.0000 s 2.0242 s 2.0491 s]
+            // 648.20 ms on desktop
             let n = 3;
             let expected_checked = 2u64.pow(n).pow(2u32.pow(n));
             // Assert it fits in usize
@@ -23,6 +24,27 @@ fn bench_my_cpu_bound(c: &mut Criterion) {
             let (maps, num_checked) = generate_maps_naive(&cube, &cube);
             assert!(num_checked == expected_checked); // there are many maps from cube to itself
             assert!(maps.len() == 15488);
+            // black_box prevents the compiler from optimizing away inputs/outputs
+            std::hint::black_box((maps, num_checked));
+        })
+    });
+    group.bench_function(BenchmarkId::new("3cube_gsphere_naive", "1e6"), |b| {
+        b.iter(|| {
+            // time:   [4.2128 s 4.2246 s 4.2355] on desktop
+            let n = 3;
+            use cube::CubeGraph;
+            use extras::greene_sphere;
+            let cube = CubeGraph::new(n);
+            let gsphere_graph = greene_sphere();
+
+            let expected_checked: u64 = (gsphere_graph.n() as u64).checked_pow(cube.n()).unwrap();
+            // Assert it fits in usize
+            assert!(expected_checked <= u64::MAX);
+
+            let (maps, num_checked) = generate_maps_naive(&cube, &gsphere_graph);
+            // print!("num maps: {} num_checked: {}\n", maps.len(), num_checked);
+            assert!(num_checked == expected_checked); // there are many maps from cube to itself
+            assert!(maps.len() == 22762, "num maps was {}", maps.len());
             // black_box prevents the compiler from optimizing away inputs/outputs
             std::hint::black_box((maps, num_checked));
         })
