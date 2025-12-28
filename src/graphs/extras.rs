@@ -17,6 +17,16 @@ pub fn greene_sphere() -> CSRGraph {
     CSRGraph::try_from(adj).unwrap()
 }
 
+pub fn C_N_graph(n: u32) -> CSRGraph {
+    let mut adj: AdjMatrix = vec![vec![false; n as usize]; n as usize];
+    for i in 0..n {
+        adj[i as usize][((i + 1) % n) as usize] = true;
+        adj[i as usize][((i + n - 1) % n) as usize] = true;
+        adj[i as usize][i as usize] = true;
+    }
+    CSRGraph::try_from(adj).unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -45,6 +55,86 @@ mod tests {
             );
             assert!(greene_sphere.is_edge(i, next));
             assert!(greene_sphere.is_edge(i, s));
+        }
+    }
+
+    #[test]
+    fn test_c_n_graph() {
+        // Test C_3 (triangle cycle)
+        let c3 = C_N_graph(3);
+        assert_eq!(c3.n(), 3, "C_3 should have 3 vertices");
+
+        // Each vertex in C_3 should have degree 3 (self-loop + 2 neighbors)
+        for i in 0..3 {
+            assert_eq!(c3.degree(i), 3, "Vertex {i} in C_3 should have degree 3");
+
+            // Check self-loop
+            assert!(c3.is_edge(i, i), "Vertex {i} should have a self-loop");
+
+            // Check neighbors
+            let next = (i + 1) % 3;
+            let prev = (i + 2) % 3; // (i - 1 + 3) % 3
+            assert!(
+                c3.is_edge(i, next),
+                "Vertex {i} should be connected to {next}"
+            );
+            assert!(
+                c3.is_edge(i, prev),
+                "Vertex {i} should be connected to {prev}"
+            );
+        }
+
+        // Test C_4 (square cycle)
+        let c4 = C_N_graph(4);
+        assert_eq!(c4.n(), 4, "C_4 should have 4 vertices");
+
+        for i in 0..4 {
+            assert_eq!(c4.degree(i), 3, "Vertex {i} in C_4 should have degree 3");
+
+            // Check that vertex is only connected to self, next, and previous
+            let next = (i + 1) % 4;
+            let prev = (i + 3) % 4; // (i - 1 + 4) % 4
+
+            for j in 0..4 {
+                let should_be_connected = j == i || j == next || j == prev;
+                assert_eq!(
+                    c4.is_edge(i, j),
+                    should_be_connected,
+                    "C_4: Edge ({i}, {j}) should be {should_be_connected}"
+                );
+            }
+        }
+
+        // Test C_5 (pentagon cycle)
+        let c5 = C_N_graph(5);
+        assert_eq!(c5.n(), 5, "C_5 should have 5 vertices");
+
+        // Verify cycle structure
+        let expected_neighbors: Vec<Vec<u32>> = vec![
+            vec![0, 1, 4], // Vertex 0: self, next (1), prev (4)
+            vec![0, 1, 2], // Vertex 1: prev (0), self, next (2)
+            vec![1, 2, 3], // Vertex 2: prev (1), self, next (3)
+            vec![2, 3, 4], // Vertex 3: prev (2), self, next (4)
+            vec![0, 3, 4], // Vertex 4: prev (3), self, next (0)
+        ];
+
+        for (i, expected) in expected_neighbors.iter().enumerate() {
+            let actual: Vec<u32> = c5.neighbors(i as u32).collect();
+            assert_eq!(
+                actual, *expected,
+                "C_5: Vertex {i} neighbors mismatch. Expected: {expected:?}, Got: {actual:?}"
+            );
+        }
+
+        // Verify symmetry
+        for i in 0u32..5 {
+            for j in 0u32..5 {
+                assert_eq!(
+                    c5.is_edge(i, j),
+                    c5.is_edge(j, i),
+                    "C_5 should be symmetric: edge ({i}, {j}) != edge ({j}, {i})"
+                );
+            }
         }
     }
 }
