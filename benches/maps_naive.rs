@@ -158,7 +158,7 @@ fn bench_non_naive(c: &mut Criterion) {
         .warm_up_time(std::time::Duration::from_secs(1));
     group_high.bench_function(BenchmarkId::new("3cube_from_2cube_gsphere", "1e6"), |b| {
         b.iter(|| {
-            // time:  [7.8974 ms 7.9080 ms 7.9209 ms]
+            // time:  [4.7626 ms 4.7679 ms 4.7732 ms]
             let n = 3;
 
             use cube::CubeGraph;

@@ -100,17 +100,13 @@ pub fn combined_cube_maps<'u, 'v, V: UGraph>(
     let mut combined_maps = Vec::new();
     let len = maps.len();
     for i in 0..len {
-        // if let Ok(combined) = maps[i].try_combine(&maps[i]) {
-        //     combined_maps.push(combined.0);
-        //     // combined_maps.push(combined.1);
-        // } else {
-        //     panic!("Could not combine map with itself");
-        // }
+        let combined = maps[i].try_combine(&maps[i]).unwrap().0;
+        combined_maps.push(combined);
 
-        for j in (0..len) {
+        for j in i + 1..len {
             if let Ok(combined) = maps[i].try_combine(&maps[j]) {
                 combined_maps.push(combined.0);
-                // combined_maps.push(combined.1);
+                combined_maps.push(combined.1);
             }
         }
     }
@@ -132,7 +128,7 @@ mod tests {
         let cube_prev = CubeGraph::new(n - 1);
         // let target = extras::greene_sphere();
         let target = extras::C_N_graph(5);
-        let (cube_prev_maps, cube_prev_numchecked) = generate_maps_naive(&cube_prev, &target);
+        let (cube_prev_maps, _) = generate_maps_naive(&cube_prev, &target);
         let cube_prev_maps = cube_prev_maps
             .into_iter()
             .map(|m| CubeMap::from(m))
