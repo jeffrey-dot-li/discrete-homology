@@ -17,7 +17,7 @@ pub fn greene_sphere() -> CSRGraph {
     CSRGraph::try_from(adj).unwrap()
 }
 
-pub fn C_N_graph(n: u32) -> CSRGraph {
+pub fn c_n_graph(n: u32) -> CSRGraph {
     let mut adj: AdjMatrix = vec![vec![false; n as usize]; n as usize];
     for i in 0..n {
         adj[i as usize][((i + 1) % n) as usize] = true;
@@ -61,7 +61,7 @@ mod tests {
     #[test]
     fn test_c_n_graph() {
         // Test C_3 (triangle cycle)
-        let c3 = C_N_graph(3);
+        let c3 = c_n_graph(3);
         assert_eq!(c3.n(), 3, "C_3 should have 3 vertices");
 
         // Each vertex in C_3 should have degree 3 (self-loop + 2 neighbors)
@@ -85,7 +85,7 @@ mod tests {
         }
 
         // Test C_4 (square cycle)
-        let c4 = C_N_graph(4);
+        let c4 = c_n_graph(4);
         assert_eq!(c4.n(), 4, "C_4 should have 4 vertices");
 
         for i in 0..4 {
@@ -106,7 +106,7 @@ mod tests {
         }
 
         // Test C_5 (pentagon cycle)
-        let c5 = C_N_graph(5);
+        let c5 = c_n_graph(5);
         assert_eq!(c5.n(), 5, "C_5 should have 5 vertices");
 
         // Verify cycle structure

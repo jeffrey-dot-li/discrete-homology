@@ -21,13 +21,11 @@ fn bench_my_cpu_bound(c: &mut Criterion) {
             // 648.20 ms on desktop
             let n = 3;
             let expected_checked = 2u64.pow(n).pow(2u32.pow(n));
-            // Assert it fits in usize
-            assert!(expected_checked <= u64::MAX);
             use cube::CubeGraph;
             let cube = CubeGraph::new(n);
             let (maps, num_checked) = generate_maps_naive(&cube, &cube);
             assert!(num_checked == expected_checked); // there are many maps from cube to itself
-            assert!(maps.len() == CUBE3_CUBE3_NUM_MAPS as usize);
+            assert!(maps.len() == CUBE3_CUBE3_NUM_MAPS);
             // black_box prevents the compiler from optimizing away inputs/outputs
             std::hint::black_box((maps, num_checked));
         })
@@ -42,8 +40,6 @@ fn bench_my_cpu_bound(c: &mut Criterion) {
             let gsphere_graph = greene_sphere();
 
             let expected_checked: u64 = (gsphere_graph.n() as u64).checked_pow(cube.n()).unwrap();
-            // Assert it fits in usize
-            assert!(expected_checked <= u64::MAX);
 
             let (maps, num_checked) = generate_maps_naive(&cube, &gsphere_graph);
             // print!("num maps: {} num_checked: {}\n", maps.len(), num_checked);
@@ -66,13 +62,11 @@ fn bench_my_cpu_bound(c: &mut Criterion) {
             // time:   [60.776 ms 61.818 ms 63.138 ms]
             let n = 3;
             use cube::CubeGraph;
-            use extras::C_N_graph;
+            use extras::c_n_graph;
             let cube = CubeGraph::new(n);
-            let c5_graph = C_N_graph(5);
+            let c5_graph = c_n_graph(5);
 
             let expected_checked: u64 = (c5_graph.n() as u64).checked_pow(cube.n()).unwrap();
-            // Assert it fits in usize
-            assert!(expected_checked <= u64::MAX);
 
             let (maps, num_checked) = generate_maps_naive(&cube, &c5_graph);
             // print!("num maps: {} num_checked: {}\n", maps.len(), num_checked);
@@ -88,13 +82,11 @@ fn bench_my_cpu_bound(c: &mut Criterion) {
             // time:   [81.899 µs 81.899 µs 81.89 µs]
             let n = 2;
             use cube::CubeGraph;
-            use extras::C_N_graph;
+            use extras::c_n_graph;
             let cube = CubeGraph::new(n);
-            let c5_graph = C_N_graph(5);
+            let c5_graph = c_n_graph(5);
 
             let expected_checked: u64 = (c5_graph.n() as u64).checked_pow(cube.n()).unwrap();
-            // Assert it fits in usize
-            assert!(expected_checked <= u64::MAX);
 
             let (maps, num_checked) = generate_maps_naive(&cube, &c5_graph);
             // print!("num maps: {} num_checked: {}\n", maps.len(), num_checked);
@@ -110,8 +102,6 @@ fn bench_my_cpu_bound(c: &mut Criterion) {
             // time:   [45.306 µs 45.938 µs 46.950 µs]
             let n = 2;
             let expected_checked = 2u64.pow(n).pow(2u32.pow(n));
-            // Assert it fits in usize
-            assert!(expected_checked <= u64::MAX);
             use cube::CubeGraph;
             let cube = CubeGraph::new(n);
             let (maps, num_checked) = generate_maps_naive(&cube, &cube);
@@ -132,8 +122,6 @@ fn bench_my_cpu_bound(c: &mut Criterion) {
             let gsphere_graph = greene_sphere();
 
             let expected_checked: u64 = (gsphere_graph.n() as u64).checked_pow(cube.n()).unwrap();
-            // Assert it fits in usize
-            assert!(expected_checked <= u64::MAX);
 
             let (maps, num_checked) = generate_maps_naive(&cube, &gsphere_graph);
             // print!("num maps: {} num_checked: {}\n", maps.len(), num_checked);
@@ -167,13 +155,13 @@ fn bench_non_naive(c: &mut Criterion) {
             let (cube2_maps, _) = generate_maps_naive(&cube2, &gsphere);
             let cube2_maps = cube2_maps
                 .into_iter()
-                .map(|m| CubeMap::from(m))
+                .map(CubeMap::from)
                 .collect::<Vec<_>>();
             // black_box prevents the compiler from optimizing away inputs/outputs
             let cube3_maps = combined_cube_maps(&cube2_maps);
             // O(2475^2) checks = O(~6_000_000) vs 10^8 naive = ~6%
             assert!(
-                cube3_maps.len() == CUBE3_TO_GSPHERE_NUM_MAPS as usize,
+                cube3_maps.len() == CUBE3_TO_GSPHERE_NUM_MAPS,
                 "num maps was {}",
                 cube3_maps.len()
             );

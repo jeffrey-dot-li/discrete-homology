@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::graph_maps::{GraphMap, GraphMapError, VertGraphMap};
+use crate::graph_maps::{GraphMapError, VertGraphMap};
 use crate::graphs::cube::CubeGraph;
 use crate::graphs::UGraph;
 use crate::prelude::*;
@@ -127,11 +127,11 @@ mod tests {
         let source = CubeGraph::new(n);
         let cube_prev = CubeGraph::new(n - 1);
         // let target = extras::greene_sphere();
-        let target = extras::C_N_graph(5);
+        let target = extras::c_n_graph(5);
         let (cube_prev_maps, _) = generate_maps_naive(&cube_prev, &target);
         let cube_prev_maps = cube_prev_maps
             .into_iter()
-            .map(|m| CubeMap::from(m))
+            .map(CubeMap::from)
             .collect::<Vec<_>>();
         // black_box prevents the compiler from optimizing away inputs/outputs
         let cube_n_combined_maps = combined_cube_maps(&cube_prev_maps);
