@@ -1,5 +1,6 @@
 pub mod cube_isomorphism;
 pub mod cube_maps;
+pub mod permutation_generator;
 use crate::prelude::*;
 use std::borrow::Cow;
 use std::fmt::Debug;
@@ -104,20 +105,6 @@ where
     }
 }
 
-/// Increment a number represented as digits in a given base.
-/// Returns false if overflow occurs (i.e., all digits wrap around to 0).
-pub fn increment_mod_base(digits: &mut [u32], base: u32) -> bool {
-    for d in digits.iter_mut() {
-        *d += 1;
-        if *d >= base {
-            *d = 0;
-        } else {
-            return true;
-        }
-    }
-    false
-}
-
 pub fn generate_maps_naive<'u, 'v, U: UGraph, V: UGraph>(
     source: &'u U,
     target: &'v V,
@@ -125,7 +112,8 @@ pub fn generate_maps_naive<'u, 'v, U: UGraph, V: UGraph>(
     let n = source.n() as usize;
     let m = target.n() as usize;
     let total_checks = (m as u64).pow(n as u32);
-    let mut current_map = vec![0u32; n];
+    let mut generator = permutation_generator::PermutationGenerator::new(n as u32, m as u32, 0);
+
     let mut maps: Vec<VertGraphMap<'u, 'v, U, V>> = Vec::new();
     let mut workspace: Vec<u32> = vec![0; n];
 
@@ -133,13 +121,13 @@ pub fn generate_maps_naive<'u, 'v, U: UGraph, V: UGraph>(
         let valid_map: Result<VertGraphMap<'u, 'v, U, V>, GraphMapError> = VertGraphMap::try_from(
             Cow::Borrowed(source),
             Cow::Borrowed(target),
-            current_map.iter().copied(),
+            generator.current.iter().copied(),
             &mut workspace,
         );
         if let Ok(map) = valid_map {
             maps.push(map);
         }
-        if !increment_mod_base(&mut current_map, m as u32) {
+        if !generator.next().is_some() {
             assert!(i == total_checks - 1);
         }
     }

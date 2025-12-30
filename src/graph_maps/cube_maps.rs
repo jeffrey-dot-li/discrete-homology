@@ -162,16 +162,40 @@ pub fn combined_cube_maps<'u, 'v, V: UGraph>(
     combined_maps
 }
 
+use crate::graph_maps::permutation_generator::PermutationGenerator;
+use arbitrary::Unstructured;
 pub fn get_valid_graph_map<'u, 'v, U: UGraph, V: UGraph>(
     source: &'u U,
     target: &'v V,
+    seed: u64,
 ) -> VertGraphMap<'u, 'v, U, V> {
     // TODO: Write proper generator for valid graph maps
     assert!(target.n() > 0);
-    VertGraphMap {
-        domain: Cow::Borrowed(source),
-        codomain: Cow::Borrowed(target),
-        vert_maps: vec![0; source.n() as usize],
+    let mut generator = PermutationGenerator::new(source.n(), target.n(), seed);
+    loop {
+        let candidate_map: Result<VertGraphMap<'u, 'v, U, V>, GraphMapError> =
+            VertGraphMap::try_from(
+                Cow::Borrowed(source),
+                Cow::Borrowed(target),
+                generator.current.iter().copied(),
+                &mut vec![0; source.n() as usize],
+            );
+        if let Ok(map) = candidate_map {
+            return map;
+        }
+        // else {
+        //     return unsafe {
+        //         VertGraphMap::new_unchecked(
+        //             Cow::Borrowed(source),
+        //             Cow::Borrowed(target),
+        //             Cow::Owned(generator.current.iter().copied().collect::<Vec<_>>()),
+        //         )
+        //     };
+        // }
+        assert!(
+            generator.next().is_some(),
+            "Ran out of permutations searching for valid graph map"
+        );
     }
 }
 
@@ -240,34 +264,37 @@ mod tests {
             "Inserting 1 at position 3 of 0b111 should give 0b1111"
         );
     }
-
     #[test]
     fn test_d_i_cube() {
-        let dim = 3;
-        let source = CubeGraph::new(dim);
-        let target = extras::greene_sphere();
+        use arbtest::arbtest;
+        arbtest(|u| {
+            let dim = 3;
+            let source = CubeGraph::new(dim);
+            let target = extras::greene_sphere();
 
-        let map = get_valid_graph_map(&source, &target);
-        let dn_map_pos = CubeMap::from(d(&map, dim - 1, true));
-        let dn_map_neg = CubeMap::from(d(&map, dim - 1, false));
-        let recombined_map = dn_map_neg.try_combine(&dn_map_pos, false);
+            let map = get_valid_graph_map(&source, &target, u.arbitrary()?);
+            let dn_map_pos = CubeMap::from(d(&map, dim - 1, true));
+            let dn_map_neg = CubeMap::from(d(&map, dim - 1, false));
+            let recombined_map = dn_map_neg.try_combine(&dn_map_pos, false);
 
-        if recombined_map.is_err() {
-            panic!(
-                "Failed to recombine maps: {:?} {:?} {:?}",
-                recombined_map.err().unwrap(),
-                dn_map_neg.map.vert_maps,
-                dn_map_pos.map.vert_maps,
+            if recombined_map.is_err() {
+                panic!(
+                    "Failed to recombine maps: {:?} {:?} {:?}",
+                    recombined_map.err().unwrap(),
+                    dn_map_neg.map.vert_maps,
+                    dn_map_pos.map.vert_maps,
+                );
+            }
+            let recombined_map = recombined_map.unwrap().0;
+
+            assert!(
+                recombined_map.map.vert_maps == map.vert_maps,
+                "Recombined map does not match original map {:?} vs {:?}",
+                recombined_map.map.vert_maps,
+                map.vert_maps
             );
-        }
-        let recombined_map = recombined_map.unwrap().0;
-
-        assert!(
-            recombined_map.map.vert_maps == map.vert_maps,
-            "Recombined map does not match original map {:?} vs {:?}",
-            recombined_map.map.vert_maps,
-            map.vert_maps
-        );
+            Ok(())
+        });
     }
 
     #[test]
