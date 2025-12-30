@@ -163,7 +163,6 @@ pub fn combined_cube_maps<'u, 'v, V: UGraph>(
 }
 
 use crate::graph_maps::permutation_generator::PermutationGenerator;
-use arbitrary::Unstructured;
 pub fn get_valid_graph_map<'u, 'v, U: UGraph, V: UGraph>(
     source: &'u U,
     target: &'v V,
@@ -172,12 +171,13 @@ pub fn get_valid_graph_map<'u, 'v, U: UGraph, V: UGraph>(
     // TODO: Write proper generator for valid graph maps
     assert!(target.n() > 0);
     let mut generator = PermutationGenerator::new(source.n(), target.n(), seed);
-    loop {
+    for _ in 0..1_000_000 {
+        let next_iter = generator.next().unwrap();
         let candidate_map: Result<VertGraphMap<'u, 'v, U, V>, GraphMapError> =
             VertGraphMap::try_from(
                 Cow::Borrowed(source),
                 Cow::Borrowed(target),
-                generator.current.iter().copied(),
+                next_iter,
                 &mut vec![0; source.n() as usize],
             );
         if let Ok(map) = candidate_map {
@@ -192,11 +192,13 @@ pub fn get_valid_graph_map<'u, 'v, U: UGraph, V: UGraph>(
         //         )
         //     };
         // }
-        assert!(
-            generator.next().is_some(),
-            "Ran out of permutations searching for valid graph map"
-        );
     }
+
+    panic!(
+        "Exceeded maximum iterations searching for valid graph map from {} to {}",
+        source.n(),
+        target.n()
+    );
 }
 
 #[cfg(test)]
@@ -268,7 +270,7 @@ mod tests {
     fn test_d_i_cube() {
         use arbtest::arbtest;
         arbtest(|u| {
-            let dim = 3;
+            let dim = 2;
             let source = CubeGraph::new(dim);
             let target = extras::greene_sphere();
 

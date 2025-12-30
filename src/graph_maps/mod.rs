@@ -117,20 +117,25 @@ pub fn generate_maps_naive<'u, 'v, U: UGraph, V: UGraph>(
     let mut maps: Vec<VertGraphMap<'u, 'v, U, V>> = Vec::new();
     let mut workspace: Vec<u32> = vec![0; n];
 
-    for i in 0..total_checks {
+    for _ in 0..total_checks {
+        let next = generator.next();
+
+        let next_iter = next.unwrap();
         let valid_map: Result<VertGraphMap<'u, 'v, U, V>, GraphMapError> = VertGraphMap::try_from(
             Cow::Borrowed(source),
             Cow::Borrowed(target),
-            generator.current.iter().copied(),
+            next_iter,
             &mut workspace,
         );
         if let Ok(map) = valid_map {
             maps.push(map);
         }
-        if !generator.next().is_some() {
-            assert!(i == total_checks - 1);
-        }
     }
+    let last = generator.next();
+    debug_assert!(
+        last.is_none(),
+        "Permutation generator not exhausted {last:?} {generator:?}"
+    );
     (maps, total_checks)
 }
 
@@ -221,7 +226,7 @@ mod tests {
             Ok(_) => {
                 panic!(
                     "Expected BadEdge error, but GraphMap was created successfully.\n\
-                     Mapping: {mapping:?}"
+                    Mapping: {mapping:?}"
                 );
             }
         }

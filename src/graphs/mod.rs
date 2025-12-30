@@ -206,9 +206,9 @@ mod tests {
             Ok(_) => {
                 panic!(
                     "Expected error for non-square matrix, but CSRGraph was created successfully.\n\
-                     Matrix dimensions: {} rows\n\
-                     Row 0 length: {}\n\
-                     Row 1 length: {} (should be {})",
+                    Matrix dimensions: {} rows\n\
+                    Row 0 length: {}\n\
+                    Row 1 length: {} (should be {})",
                     mat.len(),
                     mat[0].len(),
                     mat[1].len(),
@@ -272,7 +272,7 @@ mod tests {
             Ok(_) => {
                 panic!(
                     "Expected error for non-symmetric matrix, but CSRGraph was created successfully.\n\
-                     Asymmetry at: mat[0][1] = {}, mat[1][0] = {}",
+                    Asymmetry at: mat[0][1] = {}, mat[1][0] = {}",
                     mat[0][1], mat[1][0]
                 );
             }
