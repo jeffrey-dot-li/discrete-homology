@@ -108,7 +108,7 @@ impl<'u, 'v, V: UGraph> CubeMap<'u, 'v, u32, V> {
         let map = unsafe {
             VertGraphMap::new_unchecked(
                 combined,
-                // Codomain is almost certainly borrowed so this shouldn't be an issue.:where
+                // Codomain is almost certainly borrowed so this shouldn't be an issue.
                 self.map.codomain.clone(),
                 Cow::Owned(combined_verts),
             )
@@ -116,7 +116,7 @@ impl<'u, 'v, V: UGraph> CubeMap<'u, 'v, u32, V> {
         let map2 = unsafe {
             VertGraphMap::new_unchecked(
                 combined_2,
-                // Codomain is almost certainly borrowed so this shouldn't be an issue.:where
+                // Codomain is almost certainly borrowed so this shouldn't be an issue.
                 self.map.codomain.clone(),
                 Cow::Owned(combined_verts_2),
             )
@@ -150,6 +150,11 @@ pub fn combined_cube_maps<'u, 'v, V: UGraph>(
     let len = maps.len();
     for i in 0..len {
         let combined = maps[i].try_combine(&maps[i], true).unwrap().0;
+        // Generate combined cube maps
+        // Then filter for only non-degenerate
+        // then each map needs to check what the operator is on it.
+        // Then check if that is non zero,
+        // then if it is non zero add it to the matrix
         combined_maps.push(combined);
 
         for j in i + 1..len {

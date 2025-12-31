@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 
 use crate::graph_maps::cube_maps::CubeMap;
-use crate::graph_maps::{GraphMap, GraphMapError, VertGraphMap};
+use crate::graph_maps::VertGraphMap;
 use crate::graphs::cube::{CubeGraph, Newable};
-use crate::graphs::UGraph;
+// use crate::graphs::UGraph;
 use crate::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,7 +44,7 @@ impl CubeIso<u32> {
         }
     }
 
-    pub fn d(&self, i: u32, sign: bool) -> CubeMap<'_, '_, u32, CubeGraph<u32>> {
+    pub fn d(&self, _i: u32, _sign: bool) -> CubeMap<'_, '_, u32, CubeGraph<u32>> {
         assert!(self.graph.dim() != 0);
         // We need to get the index of d_i+- for each i.
 

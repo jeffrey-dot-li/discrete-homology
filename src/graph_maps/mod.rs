@@ -1,6 +1,7 @@
 pub mod cube_isomorphism;
 pub mod cube_maps;
 pub mod permutation_generator;
+pub mod stack_map;
 use crate::prelude::*;
 use std::borrow::Cow;
 use std::fmt::Debug;
@@ -19,7 +20,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VertGraphMap<'u, 'v, U, V>
 where
     U: UGraph,
@@ -29,10 +30,10 @@ where
     codomain: Cow<'v, V>,
     vert_maps: Vec<u32>,
 }
+
 #[derive(Debug)]
 pub enum GraphMapError {
     BadEdge(u32, u32, u32, u32),
-    InvalidMap(String),
 }
 
 impl<'u, 'v, U, V> VertGraphMap<'u, 'v, U, V>
@@ -219,9 +220,6 @@ mod tests {
         match invalid_map {
             Err(GraphMapError::BadEdge(_v1, _v2, _m1, _m2)) => {
                 // Expected error
-            }
-            Err(GraphMapError::InvalidMap(msg)) => {
-                panic!("Expected BadEdge, got InvalidMap: {msg}");
             }
             Ok(_) => {
                 panic!(
