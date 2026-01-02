@@ -19,7 +19,7 @@ where
 impl<V: UGraph, M: GraphMap<CubeGraph<u32>, V>> From<M> for CubeMap<u32, V, M> {
     fn from(value: M) -> Self {
         let degenerate_indices = (0..value.domain().dim().size() as usize)
-            .map(|i| d(&value, i as u32, false).vert_maps == d(&value, i as u32, true).vert_maps)
+            .map(|i| d(&value, i as u32, false) == d(&value, i as u32, true))
             .collect();
 
         Self {
@@ -43,24 +43,14 @@ fn put_bit(x: u32, pos: u32, value: u32) -> u32 {
     lower | (value << pos) | upper_shifted
 }
 // TODO: Implement d_i as stack graph map
-fn d<V: UGraph>(
-    map: &impl GraphMap<CubeGraph<u32>, V>,
-    i: u32,
-    sign: bool,
-) -> VertGraphMap<'_, '_, CubeGraph<u32>, V> {
+fn d<V: UGraph, M: GraphMap<CubeGraph<u32>, V>>(map: &M, i: u32, sign: bool) -> M {
     let dim = map.domain().dim().size();
     assert!(dim != 0u32);
     debug_assert!(i < dim);
     let new_dim = dim.checked_sub(1).unwrap();
     let num_verts = 2_u32.checked_pow(new_dim).unwrap();
     let vert_maps = (0..num_verts).map(|v| map.map(put_bit(v, i, if sign { 1 } else { 0 })));
-    unsafe {
-        VertGraphMap::new_unchecked(
-            Cow::Owned(CubeGraph::new(new_dim)),
-            Cow::Borrowed(map.codomain()),
-            Cow::Owned(vert_maps.collect()),
-        )
-    }
+    unsafe { map.change_domain(CubeGraph::new(new_dim), vert_maps) }
 }
 
 // impl<D: Dim, V: UGraph, M: GraphMap<CubeGraph<D>, V>> From<CubeMap<D, V, M>> for M {

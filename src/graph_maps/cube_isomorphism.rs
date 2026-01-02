@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 
-use crate::graph_maps::cube_maps::CubeMap;
 use crate::graph_maps::VertGraphMap;
 use crate::graphs::cube::{CubeGraph, Newable};
 // use crate::graphs::UGraph;

@@ -6,7 +6,7 @@ use crate::prelude::*;
 use std::borrow::Cow;
 use std::fmt::Debug;
 
-pub trait GraphMap<U, V>
+pub trait GraphMap<U, V>: Eq
 where
     U: UGraph,
     V: UGraph,
@@ -23,7 +23,7 @@ where
     ) -> Self;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VertGraphMap<'u, 'v, U, V>
 where
     U: UGraph,
@@ -142,11 +142,6 @@ pub fn generate_maps_naive<'u, 'v, U: UGraph, V: UGraph>(
     );
     (maps, total_checks)
 }
-
-
-
-
-
 
 impl<U, V> GraphMap<U, V> for VertGraphMap<'_, '_, U, V>
 where

@@ -5,7 +5,7 @@ use crate::prelude::*;
 use num_traits::{PrimInt, Unsigned};
 use std::borrow::Cow;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StackGraphMap<'u, 'v, U: UGraph, V: UGraph, T>
 where
     T: PrimInt + Unsigned,
@@ -378,11 +378,9 @@ mod tests {
             let vert_mapped: Vec<_> = original_map.mapped_vertices().collect();
 
             assert_eq!(
-                stack_mapped,
-                vert_mapped,
+                stack_mapped, vert_mapped,
                 "mapped_vertices mismatch: stack_map {:?}, vert_map {:?}",
-                stack_mapped,
-                vert_mapped
+                stack_mapped, vert_mapped
             );
 
             Ok(())
