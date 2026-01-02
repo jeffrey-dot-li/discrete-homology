@@ -1,5 +1,5 @@
-use crate::graph_maps::permutation_generator::PermutationIterator;
-use crate::graph_maps::{GraphMapError, VertGraphMap};
+use crate::graph_maps::permutation_generator::{self, PermutationIterator};
+use crate::graph_maps::{GraphMap, GraphMapError, VertGraphMap};
 use crate::graphs::UGraph;
 use crate::prelude::*;
 use num_traits::{PrimInt, Unsigned};
@@ -95,18 +95,23 @@ impl<'u, 'v, U: UGraph, V: UGraph, T: PrimInt + Unsigned> StackGraphMap<'u, 'v, 
         }
         assert!(max == (n - 1), "max should be n - 1, got {max}");
         Ok(Self {
-            vert_maps: Self::slice_convert(workspace, codomain.n()),
+            vert_maps: Self::slice_convert(workspace.iter().copied(), domain.n(), codomain.n()),
             codomain,
             domain,
         })
     }
 
-    pub fn slice_convert(slice: &[u32], codomain_n: u32) -> T {
-        debug_assert!(check_fits::<T>(slice.len() as u32, codomain_n));
+    pub fn slice_convert(
+        slice: impl IntoIterator<Item = u32>,
+        domain_n: u32,
+        codomain_n: u32,
+    ) -> T {
+        // We no longer check that the iterator length is valid here
+        debug_assert!(check_fits::<T>(domain_n, codomain_n));
         let codomain_n = T::from(codomain_n).unwrap();
         slice
-            .iter()
-            .copied()
+            .into_iter()
+            .take(domain_n as usize)
             .enumerate()
             .fold::<T, _>(T::zero(), |s, (i, v)| {
                 s + (T::from(v).unwrap() * codomain_n.pow(i as u32))
@@ -137,7 +142,11 @@ impl<'u, 'v, U: UGraph, V: UGraph, T: PrimInt + Unsigned> From<VertGraphMap<'u, 
     for StackGraphMap<'u, 'v, U, V, T>
 {
     fn from(value: VertGraphMap<'u, 'v, U, V>) -> Self {
-        let val = Self::slice_convert(value.vert_maps.as_slice(), value.codomain.n());
+        let val = Self::slice_convert(
+            value.vert_maps.as_slice().iter().copied(),
+            value.domain.n(),
+            value.codomain.n(),
+        );
         unsafe { StackGraphMap::new_unchecked(value.domain, value.codomain, val) }
     }
 }
@@ -146,9 +155,88 @@ impl<'u, 'v, 'a, U: UGraph, V: UGraph, T: PrimInt + Unsigned> From<&'a VertGraph
     for StackGraphMap<'u, 'v, U, V, T>
 {
     fn from(value: &VertGraphMap<'u, 'v, U, V>) -> Self {
-        let val = Self::slice_convert(value.vert_maps.as_slice(), value.codomain.n());
+        let val = Self::slice_convert(
+            value.vert_maps.as_slice().iter().copied(),
+            value.domain.n(),
+            value.codomain.n(),
+        );
         unsafe { StackGraphMap::new_unchecked(value.domain.clone(), value.codomain.clone(), val) }
     }
+}
+
+// TODO: Ensure parity with VertGraphMap
+impl<U, V, T: PrimInt + Unsigned> GraphMap<U, V> for StackGraphMap<'_, '_, U, V, T>
+where
+    U: UGraph,
+    V: UGraph,
+{
+    fn domain(&self) -> &U {
+        self.domain.as_ref()
+    }
+    fn codomain(&self) -> &V {
+        self.codomain.as_ref()
+    }
+    fn map(&self, u: u32) -> u32 {
+        let codomain_n = T::from(self.codomain.n()).unwrap();
+        let exp = codomain_n.pow(u);
+        let divisor = self.vert_maps / exp;
+        (divisor % codomain_n).to_u32().unwrap()
+    }
+    fn mapped_vertices(&self) -> impl Iterator<Item = u32> {
+        self.into_iter()
+    }
+    unsafe fn change_domain(
+        &self,
+        new_domain: U,
+        mapped_vertices: impl IntoIterator<Item = u32>,
+    ) -> Self {
+        let vert_map = Self::slice_convert(
+            mapped_vertices.into_iter(),
+            new_domain.n(),
+            self.codomain.n(),
+        );
+        Self {
+            domain: Cow::Owned(new_domain),
+            codomain: self.codomain.clone(),
+            vert_maps: vert_map,
+        }
+    }
+}
+
+type T = u64;
+pub fn generate_maps_naive_stack<'u, 'v, U: UGraph, V: UGraph>(
+    source: &'u U,
+    target: &'v V,
+) -> (Vec<StackGraphMap<'u, 'v, U, V, T>>, u64) {
+    let n = source.n() as usize;
+    let m = target.n() as usize;
+    let total_checks = (m as u64).pow(n as u32);
+    let mut generator = permutation_generator::PermutationGenerator::new(n as u32, m as u32, 0);
+
+    let mut maps: Vec<StackGraphMap<'u, 'v, U, V, T>> = Vec::new();
+    let mut workspace: Vec<u32> = vec![0; n];
+
+    for _ in 0..total_checks {
+        let next = generator.next();
+
+        let next_iter = next.unwrap();
+        let valid_map: Result<StackGraphMap<'u, 'v, U, V, T>, GraphMapError> =
+            StackGraphMap::try_from(
+                Cow::Borrowed(source),
+                Cow::Borrowed(target),
+                next_iter,
+                &mut workspace,
+            );
+        if let Ok(map) = valid_map {
+            maps.push(map);
+        }
+    }
+    let last = generator.next();
+    debug_assert!(
+        last.is_none(),
+        "Permutation generator not exhausted {last:?} {generator:?}"
+    );
+    (maps, total_checks)
 }
 
 #[cfg(test)]
@@ -255,5 +343,49 @@ mod tests {
         // u16 tests
         assert!(check_fits::<u16>(16, 2));
         assert!(!check_fits::<u16>(17, 2));
+    }
+
+    #[test]
+    fn test_stack_map_parity_with_vert_map() {
+        use arbtest::arbtest;
+        arbtest(|u| {
+            let dim = 2;
+            let source = CubeGraph::new(dim);
+            let target = extras::greene_sphere();
+
+            // u64 should always fit for these small graphs
+            if !check_fits::<u64>(source.n(), target.n()) {
+                return Ok(());
+            }
+
+            let original_map = get_valid_graph_map(&source, &target, u.arbitrary()?);
+            let stack_map: StackGraphMap<'_, '_, _, _, u64> = (&original_map).into();
+
+            // Test map() parity
+            for i in 0..source.n() {
+                assert_eq!(
+                    stack_map.map(i),
+                    original_map.map(i),
+                    "map({}) failed: stack_map got {}, vert_map got {}",
+                    i,
+                    stack_map.map(i),
+                    original_map.map(i)
+                );
+            }
+
+            // Test mapped_vertices() parity
+            let stack_mapped: Vec<_> = stack_map.mapped_vertices().collect();
+            let vert_mapped: Vec<_> = original_map.mapped_vertices().collect();
+
+            assert_eq!(
+                stack_mapped,
+                vert_mapped,
+                "mapped_vertices mismatch: stack_map {:?}, vert_map {:?}",
+                stack_mapped,
+                vert_mapped
+            );
+
+            Ok(())
+        });
     }
 }

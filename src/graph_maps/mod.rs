@@ -14,10 +14,13 @@ where
     fn domain(&self) -> &U;
     fn codomain(&self) -> &V;
     fn map(&self, u: u32) -> u32;
+    fn mapped_vertices(&self) -> impl Iterator<Item = u32>;
 
-    fn mapped_vertices(&self) -> impl Iterator<Item = u32> {
-        (0..self.domain().n()).map(|i| self.map(i))
-    }
+    unsafe fn change_domain(
+        &self,
+        new_domain: U,
+        mapped_vertices: impl IntoIterator<Item = u32>,
+    ) -> Self;
 }
 
 #[derive(Debug, Clone)]
@@ -140,6 +143,11 @@ pub fn generate_maps_naive<'u, 'v, U: UGraph, V: UGraph>(
     (maps, total_checks)
 }
 
+
+
+
+
+
 impl<U, V> GraphMap<U, V> for VertGraphMap<'_, '_, U, V>
 where
     U: UGraph,
@@ -153,6 +161,22 @@ where
     }
     fn map(&self, u: u32) -> u32 {
         self.vert_maps[u as usize]
+    }
+    fn mapped_vertices(&self) -> impl Iterator<Item = u32> {
+        self.vert_maps.iter().copied()
+    }
+
+    unsafe fn change_domain(
+        &self,
+        new_domain: U,
+        mapped_vertices: impl IntoIterator<Item = u32>,
+    ) -> Self {
+        let mapped_verts: Vec<u32> = mapped_vertices.into_iter().collect();
+        Self {
+            domain: Cow::Owned(new_domain),
+            codomain: self.codomain.clone(),
+            vert_maps: mapped_verts,
+        }
     }
 }
 

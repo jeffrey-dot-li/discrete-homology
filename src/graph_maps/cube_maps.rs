@@ -6,21 +6,26 @@ use crate::graphs::UGraph;
 use crate::prelude::*;
 
 #[derive(Debug)]
-pub struct CubeMap<'u, 'v, D: Dim, V: UGraph> {
-    map: VertGraphMap<'u, 'v, CubeGraph<D>, V>,
+pub struct CubeMap<D: Dim, V: UGraph, M>
+where
+    M: GraphMap<CubeGraph<D>, V>,
+{
+    map: M,
     degenerate_indices: Vec<bool>, // -> should just be a u32 bitmask
+    _marker: std::marker::PhantomData<(D, V)>,
 }
 
 // Inclusion / Forgetful functor
-impl<'u, 'v, V: UGraph> From<VertGraphMap<'u, 'v, CubeGraph<u32>, V>> for CubeMap<'u, 'v, u32, V> {
-    fn from(value: VertGraphMap<'u, 'v, CubeGraph<u32>, V>) -> Self {
-        let degenerate_indices = (0..value.domain.dim().size() as usize)
+impl<V: UGraph, M: GraphMap<CubeGraph<u32>, V>> From<M> for CubeMap<u32, V, M> {
+    fn from(value: M) -> Self {
+        let degenerate_indices = (0..value.domain().dim().size() as usize)
             .map(|i| d(&value, i as u32, false).vert_maps == d(&value, i as u32, true).vert_maps)
             .collect();
 
         Self {
             map: value,
             degenerate_indices,
+            _marker: std::marker::PhantomData,
         }
     }
 }
@@ -37,7 +42,7 @@ fn put_bit(x: u32, pos: u32, value: u32) -> u32 {
 
     lower | (value << pos) | upper_shifted
 }
-
+// TODO: Implement d_i as stack graph map
 fn d<V: UGraph>(
     map: &impl GraphMap<CubeGraph<u32>, V>,
     i: u32,
@@ -58,68 +63,63 @@ fn d<V: UGraph>(
     }
 }
 
-impl<'u, 'v, D: Dim, V: UGraph> From<CubeMap<'u, 'v, D, V>>
-    for VertGraphMap<'u, 'v, CubeGraph<D>, V>
+// impl<D: Dim, V: UGraph, M: GraphMap<CubeGraph<D>, V>> From<CubeMap<D, V, M>> for M {
+//     fn from(value: CubeMap<D, V, M>) -> Self {
+//         value.map
+//     }
+// }
+
+impl<D: Dim, V: UGraph, M> CubeMap<D, V, M>
+where
+    M: GraphMap<CubeGraph<D>, V>,
 {
-    fn from(value: CubeMap<'u, 'v, D, V>) -> Self {
-        value.map
+    // Consumes self and returns the inner map
+    pub fn into_inner(self) -> M {
+        self.map
     }
 }
 
-impl<'u, 'v, V: UGraph> CubeMap<'u, 'v, u32, V> {
+impl<V: UGraph, M: GraphMap<CubeGraph<u32>, V>> CubeMap<u32, V, M> {
     pub fn dim(&self) -> u32 {
-        self.map.domain.dim()
+        self.map.domain().dim()
     }
 
     pub fn try_combine<'w>(
         &self,
-        other: &CubeMap<'w, 'v, u32, V>,
+        other: &CubeMap<u32, V, M>,
         is_same: bool,
-    ) -> Result<(CubeMap<'w, 'v, u32, V>, CubeMap<'w, 'v, u32, V>), GraphMapError>
-    where
-        'u: 'w,
-    {
+    ) -> Result<(CubeMap<u32, V, M>, CubeMap<u32, V, M>), GraphMapError> {
         use GraphMapError as E;
-        assert!(self.map.codomain == other.map.codomain);
-        let n = self.map.domain.n();
+        assert!(self.map.codomain() == other.map.codomain());
+        let n = self.map.domain().n();
         for (i, (x, y)) in self
             .map
-            .vert_maps
-            .iter()
-            .zip(other.map.vert_maps.iter())
+            .mapped_vertices()
+            .zip(other.map.mapped_vertices())
             .enumerate()
         {
-            if !self.map.codomain.is_edge(*x, *y) {
-                return Err(E::BadEdge(i as u32, i as u32 + n, *x, *y));
+            if !self.map.codomain().is_edge(x, y) {
+                return Err(E::BadEdge(i as u32, i as u32 + n, x, y));
             }
         }
-        let combined_len = self.map.vert_maps.len() + other.map.vert_maps.len();
 
-        let mut combined_verts = Vec::with_capacity(combined_len);
-        let mut combined_verts_2 = Vec::with_capacity(combined_len);
+        let combined_verts = self
+            .map
+            .mapped_vertices()
+            .chain(other.map.mapped_vertices());
+        let combined_verts_2 = other
+            .map
+            .mapped_vertices()
+            .chain(self.map.mapped_vertices());
 
-        combined_verts.extend_from_slice(&self.map.vert_maps);
-        combined_verts.extend_from_slice(&other.map.vert_maps);
-        combined_verts_2.extend_from_slice(&other.map.vert_maps);
-        combined_verts_2.extend_from_slice(&self.map.vert_maps);
-
-        let combined = Cow::Owned(CubeGraph::new(n + 1));
-        let combined_2 = Cow::Owned(CubeGraph::new(n + 1));
         let map = unsafe {
-            VertGraphMap::new_unchecked(
-                combined,
-                // Codomain is almost certainly borrowed so this shouldn't be an issue.
-                self.map.codomain.clone(),
-                Cow::Owned(combined_verts),
-            )
+            self.map
+                .change_domain(CubeGraph::new(n + 1), combined_verts)
         };
         let map2 = unsafe {
-            VertGraphMap::new_unchecked(
-                combined_2,
-                // Codomain is almost certainly borrowed so this shouldn't be an issue.
-                self.map.codomain.clone(),
-                Cow::Owned(combined_verts_2),
-            )
+            other
+                .map
+                .change_domain(CubeGraph::new(n + 1), combined_verts_2)
         };
         let degenerate_indices_iter = self
             .degenerate_indices
@@ -134,18 +134,20 @@ impl<'u, 'v, V: UGraph> CubeMap<'u, 'v, u32, V> {
             Self {
                 map,
                 degenerate_indices: degenerate_indices.clone(),
+                _marker: std::marker::PhantomData,
             },
             Self {
                 map: map2,
                 degenerate_indices,
+                _marker: std::marker::PhantomData,
             },
         ))
     }
 }
 
-pub fn combined_cube_maps<'u, 'v, V: UGraph>(
-    maps: &[CubeMap<'u, 'v, u32, V>],
-) -> Vec<CubeMap<'u, 'v, u32, V>> {
+pub fn combined_cube_maps<V: UGraph, M: GraphMap<CubeGraph<u32>, V>>(
+    maps: &[CubeMap<u32, V, M>],
+) -> Vec<CubeMap<u32, V, M>> {
     let mut combined_maps = Vec::new();
     let len = maps.len();
     for i in 0..len {

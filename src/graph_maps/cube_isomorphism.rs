@@ -44,25 +44,25 @@ impl CubeIso<u32> {
         }
     }
 
-    pub fn d(&self, _i: u32, _sign: bool) -> CubeMap<'_, '_, u32, CubeGraph<u32>> {
-        assert!(self.graph.dim() != 0);
-        // We need to get the index of d_i+- for each i.
+    // pub fn d(&self, _i: u32, _sign: bool) -> CubeMap<'_, '_, u32, CubeGraph<u32>> {
+    //     assert!(self.graph.dim() != 0);
+    //     // We need to get the index of d_i+- for each i.
 
-        CubeMap::from(
-            // unsafe { VertGraphMap::new_unchecked(domain, codomain, vert_maps)}
-            {
-                VertGraphMap::try_from(
-                    Cow::Owned(CubeGraph::new(
-                        self.graph.dim().checked_sub(self.graph.dim()).unwrap(),
-                    )),
-                    Cow::Owned(self.graph),
-                    [0u32].iter().copied(),
-                    &mut [0u32],
-                )
-                .unwrap()
-            },
-        )
-    }
+    //     CubeMap::from(
+    //         // unsafe { VertGraphMap::new_unchecked(domain, codomain, vert_maps)}
+    //         {
+    //             VertGraphMap::try_from(
+    //                 Cow::Owned(CubeGraph::new(
+    //                     self.graph.dim().checked_sub(self.graph.dim()).unwrap(),
+    //                 )),
+    //                 Cow::Owned(self.graph),
+    //                 [0u32].iter().copied(),
+    //                 &mut [0u32],
+    //             )
+    //             .unwrap()
+    //         },
+    //     )
+    // }
 }
 
 impl From<CubeIso<u32>> for VertGraphMap<'_, '_, CubeGraph<u32>, CubeGraph<u32>> {
