@@ -6,7 +6,9 @@ use discrete_homology::graph_maps::stack_map::generate_maps_naive_stack;
 use discrete_homology::prelude::*;
 
 const CUBE3_CUBE3_NUM_MAPS: usize = 15488;
+const CUBE2_TO_GSPHERE_NUM_MAPS: usize = 442;
 const CUBE3_TO_GSPHERE_NUM_MAPS: usize = 22762;
+const CUBE4_TO_GSPHERE_NUM_MAPS: usize = 21834298;
 
 fn bench_my_cpu_bound(c: &mut Criterion) {
     let mut group = c.benchmark_group("high");
@@ -127,7 +129,11 @@ fn bench_my_cpu_bound(c: &mut Criterion) {
             let (maps, num_checked) = generate_maps_naive(&cube, &gsphere_graph);
             // print!("num maps: {} num_checked: {}\n", maps.len(), num_checked);
             assert!(num_checked == expected_checked); // there are many maps from cube to itself
-            assert!(maps.len() == 442, "num maps was {}", maps.len());
+            assert!(
+                maps.len() == CUBE2_TO_GSPHERE_NUM_MAPS,
+                "num maps was {}",
+                maps.len()
+            );
             // 442 / 10^4 = ~4%
             // black_box prevents the compiler from optimizing away inputs/outputs
             std::hint::black_box((maps, num_checked));
@@ -140,12 +146,11 @@ fn bench_my_cpu_bound(c: &mut Criterion) {
 }
 
 fn bench_non_naive(c: &mut Criterion) {
-    let mut group_high = c.benchmark_group("high_non_naive");
-    group_high
-        .sample_size(10) // default is 100
+    let mut group_non_naive = c.benchmark_group("non_naive");
+    group_non_naive
         .measurement_time(std::time::Duration::from_secs(5))
         .warm_up_time(std::time::Duration::from_secs(1));
-    group_high.bench_function(BenchmarkId::new("3cube_from_2cube_gsphere", "1e6"), |b| {
+    group_non_naive.bench_function(BenchmarkId::new("3cube_from_2cube_gsphere", "1e6"), |b| {
         let n = 3;
 
         use cube::CubeGraph;
@@ -172,7 +177,7 @@ fn bench_non_naive(c: &mut Criterion) {
         })
     });
 
-    group_high.bench_function(
+    group_non_naive.bench_function(
         BenchmarkId::new("3cube_from_2cube_gsphere_stackmap", "1e6"),
         |b| {
             let n = 3;
@@ -190,7 +195,7 @@ fn bench_non_naive(c: &mut Criterion) {
                 // time:  [4.7626 ms 4.7679 ms 4.7732 ms]
                 // black_box prevents the compiler from optimizing away inputs/outputs
                 let cube3_maps = combined_cube_maps(&cube2_maps).collect::<Vec<_>>();
-                // O(2475^2) checks = O(~6_000_000) vs 10^8 naive = ~6%
+                // O(442^2) checks = O(~200_000) vs 10^8 naive = ~0.2%
                 assert!(
                     cube3_maps.len() == CUBE3_TO_GSPHERE_NUM_MAPS,
                     "num maps was {}",
@@ -201,7 +206,41 @@ fn bench_non_naive(c: &mut Criterion) {
         },
     );
 
-    group_high.finish();
+    group_non_naive.finish();
+
+    let mut high_non_naive = c.benchmark_group("high_non_naive");
+    high_non_naive
+        .measurement_time(std::time::Duration::from_secs(60))
+        .warm_up_time(std::time::Duration::from_secs(10));
+
+    high_non_naive.bench_function(
+        BenchmarkId::new("4cube_from_3cube_gsphere_stackmap", "1e6"),
+        |b| {
+            let n = 4;
+
+            use cube::CubeGraph;
+            let cube3 = CubeGraph::new(n - 1);
+            let gsphere = extras::greene_sphere();
+            let (cube3_maps, _) = generate_maps_naive_stack(&cube3, &gsphere);
+            let cube3_maps = cube3_maps
+                .into_iter()
+                .map(CubeMap::from)
+                .collect::<Vec<_>>();
+
+            b.iter(|| {
+                // time:   [7.1462 s 7.1610 s 7.1772 s]
+                // black_box prevents the compiler from optimizing away inputs/outputs
+                let cube4_maps = combined_cube_maps(&cube3_maps).collect::<Vec<_>>();
+                // O(22_762^2) checks = O(~518_108_644) vs 10^16 naive = ~5e-8
+                assert!(
+                    cube4_maps.len() == CUBE4_TO_GSPHERE_NUM_MAPS,
+                    "num maps was {}",
+                    cube4_maps.len()
+                );
+                std::hint::black_box(cube4_maps);
+            })
+        },
+    );
 }
 
 criterion_group!(benches, bench_my_cpu_bound);
