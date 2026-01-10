@@ -1,12 +1,16 @@
 pub mod cube_isomorphism;
 pub mod cube_maps;
+pub mod hashset;
 pub mod permutation_generator;
+pub mod polynomial;
 pub mod stack_map;
+
 use crate::prelude::*;
 use std::borrow::Cow;
 use std::fmt::Debug;
+use std::hash::Hash;
 
-pub trait GraphMap<U, V>: Eq
+pub trait GraphMap<U, V>: Eq + PartialEq + Hash
 where
     U: UGraph,
     V: UGraph,
@@ -23,7 +27,7 @@ where
     ) -> Self;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VertGraphMap<'u, 'v, U, V>
 where
     U: UGraph,

@@ -161,7 +161,7 @@ fn bench_non_naive(c: &mut Criterion) {
             // time:  [4.7626 ms 4.7679 ms 4.7732 ms]
 
             // O(2475^2) checks = O(~6_000_000) vs 10^8 naive = ~6%
-            let cube3_maps = combined_cube_maps(&cube2_maps);
+            let cube3_maps = combined_cube_maps(&cube2_maps).collect::<Vec<_>>();
 
             assert!(
                 cube3_maps.len() == CUBE3_TO_GSPHERE_NUM_MAPS,
@@ -189,7 +189,7 @@ fn bench_non_naive(c: &mut Criterion) {
             b.iter(|| {
                 // time:  [4.7626 ms 4.7679 ms 4.7732 ms]
                 // black_box prevents the compiler from optimizing away inputs/outputs
-                let cube3_maps = combined_cube_maps(&cube2_maps);
+                let cube3_maps = combined_cube_maps(&cube2_maps).collect::<Vec<_>>();
                 // O(2475^2) checks = O(~6_000_000) vs 10^8 naive = ~6%
                 assert!(
                     cube3_maps.len() == CUBE3_TO_GSPHERE_NUM_MAPS,

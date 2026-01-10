@@ -1,3 +1,6 @@
+// #![feature(generic_const_exprs)]
+// #![allow(incomplete_features)]
+
 pub mod graph_maps;
 pub mod graphs;
 pub mod shape;

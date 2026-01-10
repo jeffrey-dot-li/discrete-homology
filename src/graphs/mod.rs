@@ -2,6 +2,7 @@ pub mod cube;
 pub mod extras;
 use std::convert::TryFrom;
 use std::fmt::Debug;
+use std::hash::Hash;
 pub type AdjMatrix = Vec<Vec<bool>>;
 
 pub trait GraphNeighbors {
@@ -9,7 +10,7 @@ pub trait GraphNeighbors {
 }
 
 // Simple Undirected Graph
-pub trait UGraph: Into<AdjMatrix> + GraphNeighbors + Clone + Debug + Eq {
+pub trait UGraph: Into<AdjMatrix> + GraphNeighbors + Clone + Debug + Eq + Hash {
     fn n(&self) -> u32;
 
     fn degree(&self, v: u32) -> u32;
@@ -29,7 +30,9 @@ impl<T: MaterializedUGraph> GraphNeighbors for T {
     }
 }
 
-impl<T: MaterializedUGraph + Into<AdjMatrix> + GraphNeighbors + Clone + Debug + Eq> UGraph for T {
+impl<T: MaterializedUGraph + Into<AdjMatrix> + GraphNeighbors + Clone + Debug + Eq + Hash> UGraph
+    for T
+{
     fn is_edge<V: Into<u32>>(&self, a: V, b: V) -> bool {
         self.slice_neighbors(a).contains(&b.into())
     }
@@ -42,7 +45,7 @@ impl<T: MaterializedUGraph + Into<AdjMatrix> + GraphNeighbors + Clone + Debug + 
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CSRGraph {
     offsets: Vec<u32>,
     neighbor_list: Vec<u32>,

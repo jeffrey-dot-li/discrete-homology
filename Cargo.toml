@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 arbitrary = "1.4.2"
 arbtest = "0.3.2"
+arrayvec = "0.7.6"
 num-traits = "0.2.19"
 
 
@@ -23,3 +24,8 @@ criterion = "0.8.1"
 [[bench]]
 name = "maps_naive"
 harness = false
+
+[[bin]]
+name = "discrete-homology"
+path = "src/main.rs"       # or src/main.rs
+test = false               # <--- Add this line

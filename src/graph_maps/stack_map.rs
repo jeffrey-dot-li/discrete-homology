@@ -4,18 +4,22 @@ use crate::graphs::UGraph;
 use crate::prelude::*;
 use num_traits::{PrimInt, Unsigned};
 use std::borrow::Cow;
+use std::fmt::Debug;
+use std::hash::Hash;
+pub trait UINT: Unsigned + PrimInt + Default + Debug + Hash {}
+impl<T> UINT for T where T: Unsigned + PrimInt + Default + Debug + Hash {}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StackGraphMap<'u, 'v, U: UGraph, V: UGraph, T>
 where
-    T: PrimInt + Unsigned,
+    T: UINT,
 {
     domain: Cow<'u, U>,
     codomain: Cow<'v, V>,
     vert_maps: T,
 }
 
-pub fn check_fits<T: PrimInt + Unsigned>(domain_n: u32, codomain_n: u32) -> bool {
+pub fn check_fits<T: UINT>(domain_n: u32, codomain_n: u32) -> bool {
     // Check if codomain_n^domain_n fits in T
     // We need: domain_n * log2(codomain_n) <= bits_in_T
 
@@ -33,9 +37,13 @@ pub fn check_fits<T: PrimInt + Unsigned>(domain_n: u32, codomain_n: u32) -> bool
     bits_per_digit.saturating_mul(domain_n) <= bits_in_t
 }
 
-impl<'u, 'v, U: UGraph, V: UGraph, T: PrimInt + Unsigned> StackGraphMap<'u, 'v, U, V, T> {
+impl<'u, 'v, U: UGraph, V: UGraph, T: UINT> StackGraphMap<'u, 'v, U, V, T> {
     pub fn iter(&self) -> PermutationIterator<T> {
         self.into_iter()
+    }
+
+    pub fn value(&self) -> T {
+        self.vert_maps
     }
     /// # Safety
     ///
@@ -107,7 +115,10 @@ impl<'u, 'v, U: UGraph, V: UGraph, T: PrimInt + Unsigned> StackGraphMap<'u, 'v, 
         codomain_n: u32,
     ) -> T {
         // We no longer check that the iterator length is valid here
-        debug_assert!(check_fits::<T>(domain_n, codomain_n));
+        debug_assert!(
+            check_fits::<T>(domain_n, codomain_n),
+            "Incompatible domain and codomain sizes {domain_n}, {codomain_n} for UINT type"
+        );
         let codomain_n = T::from(codomain_n).unwrap();
         slice
             .into_iter()
@@ -119,7 +130,7 @@ impl<'u, 'v, U: UGraph, V: UGraph, T: PrimInt + Unsigned> StackGraphMap<'u, 'v, 
     }
 }
 
-impl<'u, 'v, 'a, U: UGraph, V: UGraph, T: PrimInt + Unsigned> IntoIterator
+impl<'u, 'v, 'a, U: UGraph, V: UGraph, T: UINT> IntoIterator
     for &'a StackGraphMap<'u, 'v, U, V, T>
 {
     type Item = u32;
@@ -129,7 +140,7 @@ impl<'u, 'v, 'a, U: UGraph, V: UGraph, T: PrimInt + Unsigned> IntoIterator
     }
 }
 
-impl<'u, 'v, U: UGraph, V: UGraph, T: PrimInt + Unsigned> From<StackGraphMap<'u, 'v, U, V, T>>
+impl<'u, 'v, U: UGraph, V: UGraph, T: UINT> From<StackGraphMap<'u, 'v, U, V, T>>
     for VertGraphMap<'u, 'v, U, V>
 {
     fn from(value: StackGraphMap<'u, 'v, U, V, T>) -> Self {
@@ -138,7 +149,7 @@ impl<'u, 'v, U: UGraph, V: UGraph, T: PrimInt + Unsigned> From<StackGraphMap<'u,
     }
 }
 
-impl<'u, 'v, U: UGraph, V: UGraph, T: PrimInt + Unsigned> From<VertGraphMap<'u, 'v, U, V>>
+impl<'u, 'v, U: UGraph, V: UGraph, T: UINT> From<VertGraphMap<'u, 'v, U, V>>
     for StackGraphMap<'u, 'v, U, V, T>
 {
     fn from(value: VertGraphMap<'u, 'v, U, V>) -> Self {
@@ -151,7 +162,7 @@ impl<'u, 'v, U: UGraph, V: UGraph, T: PrimInt + Unsigned> From<VertGraphMap<'u, 
     }
 }
 
-impl<'u, 'v, 'a, U: UGraph, V: UGraph, T: PrimInt + Unsigned> From<&'a VertGraphMap<'u, 'v, U, V>>
+impl<'u, 'v, 'a, U: UGraph, V: UGraph, T: UINT> From<&'a VertGraphMap<'u, 'v, U, V>>
     for StackGraphMap<'u, 'v, U, V, T>
 {
     fn from(value: &VertGraphMap<'u, 'v, U, V>) -> Self {
@@ -165,7 +176,7 @@ impl<'u, 'v, 'a, U: UGraph, V: UGraph, T: PrimInt + Unsigned> From<&'a VertGraph
 }
 
 // TODO: Ensure parity with VertGraphMap
-impl<U, V, T: PrimInt + Unsigned> GraphMap<U, V> for StackGraphMap<'_, '_, U, V, T>
+impl<U, V, T: UINT> GraphMap<U, V> for StackGraphMap<'_, '_, U, V, T>
 where
     U: UGraph,
     V: UGraph,

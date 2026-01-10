@@ -2,7 +2,7 @@ use crate::graphs::{AdjMatrix, UGraph};
 use crate::prelude::*;
 use crate::shape::{Const, Dim};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CubeGraph<D: Dim> {
     // Dim should be like u8, it should be the num_vertices that are : Dim.
     dim: D,

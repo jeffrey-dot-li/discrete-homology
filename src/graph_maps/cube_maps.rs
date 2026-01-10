@@ -1,9 +1,14 @@
 use std::borrow::Cow;
 
+use crate::graph_maps::hashset::{OpenHashSet, UIntOpenHashSet};
+use crate::graph_maps::polynomial::Poly;
+use crate::graph_maps::stack_map::{StackGraphMap, UINT};
 use crate::graph_maps::{GraphMap, GraphMapError, VertGraphMap};
 use crate::graphs::cube::{CubeGraph, Newable};
 use crate::graphs::UGraph;
 use crate::prelude::*;
+
+use std::fmt::Debug;
 
 #[derive(Debug)]
 pub struct CubeMap<D: Dim, V: UGraph, M>
@@ -11,6 +16,7 @@ where
     M: GraphMap<CubeGraph<D>, V>,
 {
     map: M,
+    // TODO: Maybe use stack map here
     degenerate_indices: Vec<bool>, // -> should just be a u32 bitmask
     _marker: std::marker::PhantomData<(D, V)>,
 }
@@ -42,7 +48,7 @@ fn put_bit(x: u32, pos: u32, value: u32) -> u32 {
 
     lower | (value << pos) | upper_shifted
 }
-// TODO: Implement d_i as stack graph map
+
 fn d<V: UGraph, M: GraphMap<CubeGraph<u32>, V>>(map: &M, i: u32, sign: bool) -> M {
     let dim = map.domain().dim().size();
     assert!(dim != 0u32);
@@ -53,11 +59,60 @@ fn d<V: UGraph, M: GraphMap<CubeGraph<u32>, V>>(map: &M, i: u32, sign: bool) -> 
     unsafe { map.change_domain(CubeGraph::new(new_dim), vert_maps) }
 }
 
-// impl<D: Dim, V: UGraph, M: GraphMap<CubeGraph<D>, V>> From<CubeMap<D, V, M>> for M {
-//     fn from(value: CubeMap<D, V, M>) -> Self {
-//         value.map
-//     }
-// }
+fn check_is_degenerate_naive<V: UGraph, M: GraphMap<CubeGraph<u32>, V>>(map: &M) -> bool {
+    (0..map.domain().dim().size()).any(|i| d(map, i, false) == d(map, i, true))
+}
+
+// should this be on graph maps or on CubeMap?
+impl<V: UGraph, M: GraphMap<CubeGraph<u32>, V>> CubeMap<u32, V, M> {
+    pub fn partial_naive(&self) -> Vec<(i32, M)> {
+        let mut maps = Vec::new();
+        for i in 0..self.map.domain().dim().size() {
+            // False is negative, True is positive.
+            let sign = if (i % 2) == 0 { -1 } else { 1 };
+            let neg_side = d(&self.map, i, false);
+            let pos_side = d(&self.map, i, true);
+            if !check_is_degenerate_naive(&neg_side) {
+                maps.push((sign, neg_side));
+            }
+            if !check_is_degenerate_naive(&pos_side) {
+                maps.push((-sign, pos_side));
+            }
+        }
+        maps
+    }
+}
+
+pub fn partial<'u, 'v, V: UGraph, T: UINT, const CAP: usize, H: OpenHashSet<T>>(
+    map: &StackGraphMap<'u, 'v, CubeGraph<u32>, V, T>,
+    non_degen_maps: &H,
+) -> Poly<T, CAP> {
+    let mut sum = Poly::<T, CAP>::zero();
+    debug_assert!(CAP == (2 * map.domain().dim().size()) as usize);
+    for i in 0..map.domain().dim().size() {
+        let sign = if (i % 2) == 0 { 1 } else { -1 };
+        let neg_side = d(map, i, false);
+        let pos_side = d(map, i, true);
+        if non_degen_maps.get(&neg_side.value()) {
+            sum = sum.add(&Poly::new(neg_side.value(), -1 * sign)).unwrap();
+        }
+        if non_degen_maps.get(&pos_side.value()) {
+            sum = sum.add(&Poly::new(pos_side.value(), 1 * sign)).unwrap();
+        }
+    }
+    sum
+}
+
+pub fn build_hashmap<'u, 'v, 'w, V: UGraph + 'v, T: UINT + 'w, I>(iter: I) -> UIntOpenHashSet<T>
+where
+    I: IntoIterator<Item = &'w StackGraphMap<'u, 'v, CubeGraph<u32>, V, T>> + 'w,
+    'u: 'w,
+    'v: 'w,
+{
+    let mut set = UIntOpenHashSet::with_capacity(1024);
+    set.extend(iter.into_iter().map(|m| m.value()));
+    set
+}
 
 impl<D: Dim, V: UGraph, M> CubeMap<D, V, M>
 where
@@ -66,6 +121,9 @@ where
     // Consumes self and returns the inner map
     pub fn into_inner(self) -> M {
         self.map
+    }
+    pub fn is_degenerate(&self) -> bool {
+        self.degenerate_indices.iter().any(|b| *b)
     }
 }
 
@@ -82,6 +140,7 @@ impl<V: UGraph, M: GraphMap<CubeGraph<u32>, V>> CubeMap<u32, V, M> {
         use GraphMapError as E;
         assert!(self.map.codomain() == other.map.codomain());
         let n = self.map.domain().n();
+        let dim = self.map.domain().dim();
         for (i, (x, y)) in self
             .map
             .mapped_vertices()
@@ -104,12 +163,12 @@ impl<V: UGraph, M: GraphMap<CubeGraph<u32>, V>> CubeMap<u32, V, M> {
 
         let map = unsafe {
             self.map
-                .change_domain(CubeGraph::new(n + 1), combined_verts)
+                .change_domain(CubeGraph::new(dim + 1), combined_verts)
         };
         let map2 = unsafe {
             other
                 .map
-                .change_domain(CubeGraph::new(n + 1), combined_verts_2)
+                .change_domain(CubeGraph::new(dim + 1), combined_verts_2)
         };
         let degenerate_indices_iter = self
             .degenerate_indices
@@ -137,26 +196,18 @@ impl<V: UGraph, M: GraphMap<CubeGraph<u32>, V>> CubeMap<u32, V, M> {
 
 pub fn combined_cube_maps<V: UGraph, M: GraphMap<CubeGraph<u32>, V>>(
     maps: &[CubeMap<u32, V, M>],
-) -> Vec<CubeMap<u32, V, M>> {
-    let mut combined_maps = Vec::new();
-    let len = maps.len();
-    for i in 0..len {
-        let combined = maps[i].try_combine(&maps[i], true).unwrap().0;
-        // Generate combined cube maps
-        // Then filter for only non-degenerate
-        // then each map needs to check what the operator is on it.
-        // Then check if that is non zero,
-        // then if it is non zero add it to the matrix
-        combined_maps.push(combined);
+) -> impl Iterator<Item = CubeMap<u32, V, M>> + '_ {
+    (0..maps.len()).flat_map(move |i| {
+        // Self-combine: maps[i] with itself
+        let self_combined = std::iter::once(maps[i].try_combine(&maps[i], true).unwrap().0);
 
-        for j in i + 1..len {
-            if let Ok(combined) = maps[i].try_combine(&maps[j], false) {
-                combined_maps.push(combined.0);
-                combined_maps.push(combined.1);
-            }
-        }
-    }
-    combined_maps
+        // Cross-combine: maps[i] with maps[j] for all j > i
+        let cross_combines = (i + 1..maps.len())
+            .filter_map(move |j| maps[i].try_combine(&maps[j], false).ok())
+            .flat_map(|(combined_0, combined_1)| [combined_0, combined_1]);
+
+        self_combined.chain(cross_combines)
+    })
 }
 
 use crate::graph_maps::permutation_generator::PermutationGenerator;
@@ -200,7 +251,7 @@ pub fn get_valid_graph_map<'u, 'v, U: UGraph, V: UGraph>(
 
 #[cfg(test)]
 mod tests {
-    use crate::graph_maps::generate_maps_naive;
+    use crate::graph_maps::{generate_maps_naive, stack_map::generate_maps_naive_stack};
 
     use super::*;
 
@@ -310,8 +361,8 @@ mod tests {
             .into_iter()
             .map(CubeMap::from)
             .collect::<Vec<_>>();
-        // black_box prevents the compiler from optimizing away inputs/outputs
-        let cube_n_combined_maps = combined_cube_maps(&cube_prev_maps);
+        // Collect the iterator to count results
+        let cube_n_combined_maps: Vec<_> = combined_cube_maps(&cube_prev_maps).collect();
 
         let cube_n_naive_maps = generate_maps_naive(&source, &target).0;
 
@@ -321,5 +372,40 @@ mod tests {
             cube_n_combined_maps.len(),
             cube_n_naive_maps.len()
         );
+    }
+
+    #[test]
+    fn test_partial_cube_map() {
+        const N: usize = 2;
+
+        use cube::CubeGraph;
+        let source = CubeGraph::new(N as u32);
+        let target = extras::greene_sphere();
+        let (cube_maps, _) = generate_maps_naive_stack(&source, &target);
+        let cube_maps = cube_maps.into_iter().map(CubeMap::from).collect::<Vec<_>>();
+        let non_degen_set = build_hashmap(
+            cube_maps
+                .iter()
+                .filter(|&map| !map.is_degenerate())
+                .map(|m| &m.map),
+        );
+        let combined_iter = combined_cube_maps(&cube_maps);
+
+        for combined_map in combined_iter {
+            let naive_partial = combined_map.partial_naive();
+            let mut poly: Poly<u64, { 2 * (N + 1) }> = partial(&combined_map.map, &non_degen_set);
+            let original_poly = poly.clone();
+            for (sign, element) in naive_partial.clone() {
+                let poly_component = Poly::new(element.value(), sign);
+                poly = poly.add(&poly_component.mul_scalar(-1)).unwrap();
+            }
+            assert!(
+                poly == Poly::zero(),
+                "Partial from naive {:?} does not match partial from hashset {:?} {:?}",
+                original_poly,
+                naive_partial,
+                poly,
+            );
+        }
     }
 }

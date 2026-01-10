@@ -1,10 +1,10 @@
-use std::convert::TryInto;
+use std::{convert::TryInto, hash::Hash};
 
 // https://github.com/coreylowman/dfdx/blob/5e0c3ddda5de3258d52f9d728426adc191ae1f5e/dfdx-core/src/shapes/shape.rs#L9
 
 /// Represents a single dimension of a multi dimensional [Shape]
 pub trait Dim<T: TryInto<usize> + Copy = u32>:
-    'static + Copy + Clone + std::fmt::Debug + Send + Sync + Eq + PartialEq
+    'static + Copy + Clone + std::fmt::Debug + Send + Sync + Eq + PartialEq + Hash
 {
     fn size(&self) -> T;
     fn from_size(size: T) -> Option<Self>;
@@ -28,7 +28,7 @@ impl Dim<u32> for u32 {
 }
 
 /// Represents a [Dim] with size known at compile time
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub struct Const<const M: u32>;
 impl<const M: u32> Dim<u32> for Const<M> {
     #[inline(always)]
