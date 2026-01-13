@@ -1,4 +1,4 @@
-use crate::graph_maps::stack_map::UINT;
+use super::uint::UINT;
 use std::fmt;
 
 pub trait Hashable {

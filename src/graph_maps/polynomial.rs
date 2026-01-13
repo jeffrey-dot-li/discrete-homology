@@ -26,6 +26,10 @@ impl<T: PrimInt + Unsigned + Default + Zero, const CAP: usize> Poly<T, CAP> {
         Self::default()
     }
 
+    pub fn is_zero(&self) -> bool {
+        self.indices.is_empty()
+    }
+
     pub fn mul_scalar(mut self, scalar: i32) -> Self {
         if scalar == 0 {
             return Self::zero();

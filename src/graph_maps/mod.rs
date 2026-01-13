@@ -4,7 +4,11 @@ pub mod hashset;
 pub mod permutation_generator;
 pub mod polynomial;
 pub mod stack_map;
+pub mod uint;
 
+// pub mod prelude {
+//     pub use super::uint::*;
+// }
 use crate::prelude::*;
 use std::borrow::Cow;
 use std::fmt::Debug;
@@ -48,6 +52,10 @@ where
     U: UGraph,
     V: UGraph,
 {
+    #[inline]
+    pub fn vert_maps(&self) -> &[u32] {
+        &self.vert_maps
+    }
     /// # Safety
     ///
     /// Yeah this doesn't actually check if vert_maps are legit
@@ -289,11 +297,37 @@ mod tests {
         );
     }
 
+    fn test_num_graph_maps<D: UGraph, C: UGraph>(
+        domain: &D,
+        codomain: &C,
+        expected_num: usize,
+        expected_checks: u64,
+    ) {
+        let (cube_maps, num_checks) = generate_maps_naive(domain, codomain);
+
+        assert!(
+            cube_maps.len() == expected_num,
+            "num maps was {}, expected {}",
+            cube_maps.len(),
+            expected_num
+        );
+        assert!(
+            num_checks == expected_checks,
+            "num checks was {}, expected {}",
+            num_checks,
+            expected_checks
+        );
+    }
+
     #[test]
-    fn test_cube2_graphs() {
-        let cube2 = CubeGraph::<Const<2>>::default();
-        let (maps, total_checks) = generate_maps_naive(&cube2, &cube2);
-        assert_eq!(total_checks, 256); // 2^2 = 4 vertices, so 4^4 = 256 total maps checked
-        assert_eq!(maps.len(), 84); // There are 24 valid graph maps from 2-cube to 2
+    fn test_simple_graph_maps() {
+        use cube::CubeGraph;
+        let cube2 = CubeGraph::new(2);
+        let cube3 = CubeGraph::new(3);
+        let c5 = extras::c_n_graph(5);
+        test_num_graph_maps(&cube2, &c5, 95, 625);
+        test_num_graph_maps(&cube2, &cube3, 320, 4096);
+        test_num_graph_maps(&cube2, &greene_sphere(), 442, 10000);
+        test_num_graph_maps(&cube2, &cube2, 84, 256);
     }
 }
