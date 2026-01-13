@@ -1,7 +1,9 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 
+use discrete_homology::computations::boundary::{boundary_maps, build_hashmap};
 use discrete_homology::graph_maps::cube_maps::{combined_cube_maps, CubeMap};
 use discrete_homology::graph_maps::generate_maps_naive;
+use discrete_homology::graph_maps::polynomial::Poly;
 use discrete_homology::graph_maps::stack_map::generate_maps_naive_stack;
 use discrete_homology::prelude::*;
 
@@ -9,6 +11,7 @@ const CUBE3_CUBE3_NUM_MAPS: usize = 15488;
 const CUBE2_TO_GSPHERE_NUM_MAPS: usize = 442;
 const CUBE3_TO_GSPHERE_NUM_MAPS: usize = 22762;
 const CUBE4_TO_GSPHERE_NUM_MAPS: usize = 21834298;
+const NUM_4CUBE_GSPHERE_NON_DEGEN_MAPS: usize = 21619544;
 
 fn bench_my_cpu_bound(c: &mut Criterion) {
     let mut group = c.benchmark_group("high");
@@ -210,8 +213,47 @@ fn bench_non_naive(c: &mut Criterion) {
 
     let mut high_non_naive = c.benchmark_group("high_non_naive");
     high_non_naive
+        .sample_size(1)
         .measurement_time(std::time::Duration::from_secs(60))
         .warm_up_time(std::time::Duration::from_secs(10));
+
+    high_non_naive.bench_function(
+        BenchmarkId::new("4cube_non_degen_maps_from_3_cube", "1e6"),
+        |b| {
+            const N: usize = 4;
+
+            use cube::CubeGraph;
+            let cube3 = CubeGraph::new((N - 1) as u32);
+            let gsphere = extras::greene_sphere();
+
+            let (cube_maps, _) = generate_maps_naive_stack(&cube3, &gsphere);
+            let cube_maps = cube_maps.into_iter().map(CubeMap::from).collect::<Vec<_>>();
+
+            let non_degen_set = build_hashmap(
+                cube_maps
+                    .iter()
+                    .filter(|&map| !map.is_degenerate())
+                    .map(|m| m.inner()),
+            );
+            //
+
+            b.iter(|| {
+                // time:   [14.829 s 14.858 s 14.890 s]
+                // Expected time for non degen 5 cube -> greene sphere maps = (CUBE4_TO_GSPHERE_NUM_MAPS/22762) ^ 2 * 14s
+                // = 920k * 14s = 150 days
+                let combined_iter = combined_cube_maps(&cube_maps);
+                let boundary_maps: Vec<Poly<u64, { 2 * N }>> =
+                    boundary_maps(combined_iter, &non_degen_set).collect();
+                assert!(
+                    boundary_maps.len() == NUM_4CUBE_GSPHERE_NON_DEGEN_MAPS,
+                    "Expected {} boundary maps, got {}",
+                    NUM_4CUBE_GSPHERE_NON_DEGEN_MAPS,
+                    boundary_maps.len()
+                );
+                std::hint::black_box(boundary_maps);
+            })
+        },
+    );
 
     high_non_naive.bench_function(
         BenchmarkId::new("4cube_from_3cube_gsphere_stackmap", "1e6"),

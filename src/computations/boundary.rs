@@ -61,7 +61,7 @@ where
     }
 }
 
-pub fn boundary_maps<'u, 'v, V, T: UINT + Hashable, H: OpenHashSet<T>, const CAP: usize, Item, I>(
+pub fn boundary_maps<'u, 'v, const CAP: usize, V, T: UINT + Hashable, H: OpenHashSet<T>, I>(
     combined_cube_maps: I,
     non_degen_set: &'u H,
 ) -> impl Iterator<Item = Poly<T, CAP>> + 'u + 'v
@@ -175,5 +175,34 @@ mod tests {
             );
             Ok(())
         });
+    }
+
+    #[test]
+    fn test_boundary_maps() {
+        const N: usize = 2;
+
+        use cube::CubeGraph;
+        let source = CubeGraph::new(N as u32);
+        let target = extras::greene_sphere();
+        let (cube_maps, _) = generate_maps_naive_stack(&source, &target);
+        let cube_maps = cube_maps.into_iter().map(CubeMap::from).collect::<Vec<_>>();
+
+        let non_degen_set = build_hashmap(
+            cube_maps
+                .iter()
+                .filter(|&map| !map.is_degenerate())
+                .map(|m| m.inner()),
+        );
+        //
+        let combined_iter = combined_cube_maps(&cube_maps);
+        let boundary_maps: Vec<Poly<u64, { 2 * (N + 1) }>> =
+            boundary_maps(combined_iter, &non_degen_set).collect();
+        let expected = 21552;
+        assert!(
+            boundary_maps.len() == expected,
+            "Expected {} boundary maps, got {}",
+            expected,
+            boundary_maps.len()
+        );
     }
 }
