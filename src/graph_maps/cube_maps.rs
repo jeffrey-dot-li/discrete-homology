@@ -251,7 +251,10 @@ pub fn get_valid_graph_map<'u, 'v, U: UGraph, V: UGraph>(
 
 #[cfg(test)]
 mod tests {
-    use crate::graph_maps::{generate_maps_naive, stack_map::generate_maps_naive_stack};
+    use crate::{
+        graph_maps::{generate_maps_naive, stack_map::generate_maps_naive_stack},
+        graphs::extras::greene_sphere,
+    };
 
     use super::*;
 
@@ -345,6 +348,28 @@ mod tests {
             );
             Ok(())
         });
+    }
+
+    fn test_num_graph_maps<D: UGraph, C: UGraph>(domain: &D, codomain: &C, expected_num: usize) {
+        let (cube_maps, _) = generate_maps_naive(domain, codomain);
+
+        assert!(
+            cube_maps.len() == expected_num,
+            "num maps was {}, expected {}",
+            cube_maps.len(),
+            expected_num
+        );
+    }
+
+    #[test]
+    fn test_simple_graph_maps() {
+        use cube::CubeGraph;
+        let cube2 = CubeGraph::new(2);
+        let cube3 = CubeGraph::new(3);
+        let c5 = extras::c_n_graph(5);
+        test_num_graph_maps(&cube2, &c5, 95);
+        test_num_graph_maps(&cube2, &cube3, 320);
+        test_num_graph_maps(&cube2, &greene_sphere(), 442);
     }
 
     #[test]
