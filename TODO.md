@@ -18,10 +18,16 @@
       `graph_maps/cube_isomorphism.rs`.
 - [ ] Semi-degenerate discarding (Def 1.4) and work over `F_p` with
       `p ∤ (n+1)!` (required by Theorem 1.3).
-- [ ] RedZeD `R_p` / `R_p^-1` dictionaries, `process_redzed`, and active
-      enumeration (Algorithm 2). This is what makes H_3 / H_4 reachable: the
-      Greene sphere has ~6.4e12 5-cubes, so the top-dimensional generators must
-      never be enumerated.
+- [x] RedZeD reduction + active enumeration (Algorithm 2), unquotiented.
+      `computations::redzed`: `ColumnReducer` is the `R_p` / `R_p^-1` core (rows
+      are the *births* of the degree below, i.e. the map `r_{p-1}`), and
+      `redzed_dh` runs Phase 1 + Phase 2. Validated: it reproduces
+      `homology::betti_numbers` on C3..C6 and Gsph, in both full and active
+      modes. Active enumeration skips ~97% of top cubes (Gsph degree 3:
+      21424 -> 583).
+  - Remaining: `redzed_dh` hardcodes the `Poly` capacity dispatch (CAP =
+    2, 4, 6), so only n = 1, 2 run. Extending to n >= 3 needs the same dispatch
+    plus the reductions below, or a non-const-capacity `Poly`.
 - [ ] Dominated-vertex preprocessing from [KK24] arXiv:2410.09939.
 
 ## Conventions

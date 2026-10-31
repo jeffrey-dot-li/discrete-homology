@@ -23,6 +23,7 @@
 
 use std::collections::HashMap;
 
+use super::fp::{mod_inv, mod_norm, normalize, sub_scaled};
 use crate::computations::boundary::{build_hashmap, partial};
 use crate::graph_maps::cube_maps::{combined_cube_maps, CubeMap};
 use crate::graph_maps::hashset::UIntOpenHashSet;
@@ -86,93 +87,17 @@ pub fn gen_level<'u, 'v, V: UGraph>(
         .collect()
 }
 
-#[inline]
-fn mod_norm(x: i64, p: i64) -> i64 {
-    let m = x % p;
-    if m < 0 {
-        m + p
-    } else {
-        m
-    }
-}
-
-/// Modular inverse of `a` mod the prime `p`, via the extended Euclidean
-/// algorithm. `a` must be nonzero mod `p`.
-fn mod_inv(a: i64, p: i64) -> i64 {
-    let a = mod_norm(a, p);
-    let (mut t, mut new_t) = (0i64, 1i64);
-    let (mut r, mut new_r) = (p, a);
-    while new_r != 0 {
-        let q = r / new_r;
-        let t_next = t - q * new_t;
-        t = new_t;
-        new_t = t_next;
-        let r_next = r - q * new_r;
-        r = new_r;
-        new_r = r_next;
-    }
-    debug_assert_eq!(r, 1, "mod_inv requires a prime modulus and a != 0");
-    mod_norm(t, p)
-}
-
-/// `a - scale * b`, termwise mod `p`, with both inputs sorted ascending by
-/// row. Zero terms are dropped.
-fn sub_scaled(a: &[(u32, i64)], b: &[(u32, i64)], scale: i64, p: i64) -> Vec<(u32, i64)> {
-    let mut out = Vec::with_capacity(a.len() + b.len());
-    let (mut i, mut j) = (0usize, 0usize);
-    while i < a.len() && j < b.len() {
-        let (ra, ca) = a[i];
-        let rb = b[j].0;
-        if ra < rb {
-            out.push((ra, ca));
-            i += 1;
-        } else if ra > rb {
-            let cb = mod_norm(-(b[j].1 * scale), p);
-            if cb != 0 {
-                out.push((rb, cb));
-            }
-            j += 1;
-        } else {
-            let v = mod_norm(ca - b[j].1 * scale, p);
-            if v != 0 {
-                out.push((ra, v));
-            }
-            i += 1;
-            j += 1;
-        }
-    }
-    while i < a.len() {
-        out.push(a[i]);
-        i += 1;
-    }
-    while j < b.len() {
-        let v = mod_norm(-(b[j].1 * scale), p);
-        if v != 0 {
-            out.push((b[j].0, v));
-        }
-        j += 1;
-    }
-    out
-}
-
 /// Rank of a sparse matrix over `F_p`, given as a list of columns. Each column
-/// is a list of `(row, coefficient)`. Coefficients need not be reduced or
-/// ordered on input. Rows are arbitrary `u32` labels, so the number of rows is
-/// not needed here.
+/// is a list of `(row, coefficient)`; coefficients need not be reduced, ordered,
+/// or free of duplicate rows on input (see [`normalize`]). Rows are arbitrary
+/// `u32` labels, so the number of rows is not needed here.
 ///
 /// Sparse Gaussian elimination with a pivot per leading row; pivot columns are
 /// normalised to leading coefficient 1.
 pub fn rank_mod_p(columns: &[Vec<(u32, i64)>], p: i64) -> usize {
     let mut pivots: HashMap<u32, Vec<(u32, i64)>> = HashMap::new();
     for col in columns {
-        let mut work: Vec<(u32, i64)> = Vec::with_capacity(col.len());
-        for &(r, c) in col {
-            let c = mod_norm(c, p);
-            if c != 0 {
-                work.push((r, c));
-            }
-        }
-        work.sort_unstable_by_key(|&(r, _)| r);
+        let mut work = normalize(col, p);
 
         // Reduce `work` against existing pivots until its leading entry hits an
         // unused row (then it becomes a new pivot) or it vanishes.
@@ -296,6 +221,15 @@ mod tests {
 
         // Dependent after scaling: col2 = 2 * col1.
         let cols = vec![vec![(0u32, 3i64), (2, 5)], vec![(0, 6), (2, 10)]];
+        assert_eq!(rank_mod_p(&cols, P), 1);
+
+        // Duplicate rows within a column must be merged, not treated as two
+        // separate entries: [1,0] + [1,0] == 2*[1,0], still rank 1, not 2.
+        let cols = vec![vec![(0u32, 1i64), (0, 1)], vec![(1u32, 1i64)]];
+        assert_eq!(rank_mod_p(&cols, P), 2);
+
+        // And a pair of duplicate rows that cancels leaves a zero column.
+        let cols = vec![vec![(0u32, 1i64), (0, -1)], vec![(1u32, 1i64)]];
         assert_eq!(rank_mod_p(&cols, P), 1);
     }
 
