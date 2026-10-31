@@ -13,11 +13,35 @@
 
 ## Aligning with arXiv:2608.04262 (RedZeD DH)
 
-- [ ] Hyperoctahedral quotient `Aut(Q_n) = S_n |> (Z_2)^n` plus `hyper_orbit` /
-      `rep_and_sign` ([GWW25] arXiv:2508.14639); stub in
-      `graph_maps/cube_isomorphism.rs`.
-- [ ] Semi-degenerate discarding (Def 1.4) and work over `F_p` with
-      `p ∤ (n+1)!` (required by Theorem 1.3).
+- [x] Hyperoctahedral quotient and semi-degenerate discarding: the *algebra and
+      its validation*, not yet the generation.
+  - `graph_maps/symmetry.rs`: `AutQn = S_n |x (Z_2)^n` as a factoradic
+    permutation plus a reflection bitmask (`n <= 12`), with `sign`,
+    `vertex_image` and `compose`. That `sign` is multiplicative is asserted by
+    enumerating `s` and `t` and finding the element realising the composite
+    action; the parametrisation need not be the textbook one, only a bijection
+    with a multiplicative sign.
+  - `computations/quotient.rs`: `rep_and_sign` (orbit minimum as representative)
+    `QuotientLevel` (basis plus a cube -> class lookup that panics rather than
+    silently dropping a boundary term), `quotient_boundary` (each face replaced
+    by its representative with the class sign folded in), and `quotient_report`
+    mirroring `homology::report_to` so the two are directly comparable.
+  - Validated: rep/sign are orbit invariant, degenerate implies semi-degenerate,
+    `d^2 = 0` on the quotient, and the Betti numbers agree with the
+    unquotiented complex on C3..C6 and Gsph. Needs odd `p` with `p > (n+1)!`.
+  - The shrink is *better* than `n! * 2^n`, for three reasons: semi-degenerate
+    cubes vanish entirely instead of forming orbits, orbits may have
+    positive-sign stabilisers, and a whole degree can vanish. For C5 every
+    2-cube is semi-degenerate so `|C_2/R_2| = 0`; Gsph keeps `|C_2/R_2| = 8`
+    (`beta_2 = 8 - rank(d_2) = 1`, a non-vacuous match).
+  - Original stub in `graph_maps/cube_isomorphism.rs` is superseded by
+    `symmetry.rs` and is still dead code.
+
+- [ ] Quotient *generation* (paper Algorithm 1): `L` = all orbit
+      representatives, `C` = those that are neither degenerate nor
+      semi-degenerate, built by pairing with `hyper_orbit(B)`. This is where the
+      remaining cost sits, since the inner loop ranges over the whole orbit
+      (`n! * 2^n` images) to be able to place the fixed active cube on any face.
 - [x] RedZeD reduction + active enumeration (Algorithm 2), unquotiented.
       `computations::redzed`: `ColumnReducer` is the `R_p` / `R_p^-1` core (rows
       are the *births* of the degree below, i.e. the map `r_{p-1}`), and

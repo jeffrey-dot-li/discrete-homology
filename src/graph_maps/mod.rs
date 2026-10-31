@@ -4,6 +4,7 @@ pub mod hashset;
 pub mod permutation_generator;
 pub mod polynomial;
 pub mod stack_map;
+pub mod symmetry;
 pub mod uint;
 
 // pub mod prelude {
