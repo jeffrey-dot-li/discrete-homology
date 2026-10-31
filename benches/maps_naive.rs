@@ -13,6 +13,9 @@ const CUBE3_TO_GSPHERE_NUM_MAPS: usize = 22762;
 const CUBE4_TO_GSPHERE_NUM_MAPS: usize = 21834298;
 const NUM_4CUBE_GSPHERE_NON_DEGEN_MAPS: usize = 21619544;
 
+const NUM_3CUBE_C5_MAPS: usize = 2475;
+const NUM_4CUBE_C5_NON_DEGEN_MAPS: usize = 969830;
+
 fn bench_my_cpu_bound(c: &mut Criterion) {
     let mut group = c.benchmark_group("high");
 
@@ -153,6 +156,37 @@ fn bench_non_naive(c: &mut Criterion) {
     group_non_naive
         .measurement_time(std::time::Duration::from_secs(5))
         .warm_up_time(std::time::Duration::from_secs(1));
+
+    group_non_naive.bench_function(
+        BenchmarkId::new("3cube_from_2cube_c5_stackmap", "1e6"),
+        |b| {
+            let n = 3;
+
+            use cube::CubeGraph;
+            let cube2 = CubeGraph::new(n - 1);
+            let codomain = extras::c_n_graph(5);
+            let (cube2_maps, _) = generate_maps_naive_stack(&cube2, &codomain);
+            let cube2_maps = cube2_maps
+                .into_iter()
+                .map(CubeMap::from)
+                .collect::<Vec<_>>();
+
+            b.iter(|| {
+                // time:  [4.7626 ms 4.7679 ms 4.7732 ms]
+                // black_box prevents the compiler from optimizing away inputs/outputs
+                let cube3_maps = combined_cube_maps(&cube2_maps).collect::<Vec<_>>();
+                // O(442^2) checks = O(~200_000) vs 10^8 naive = ~0.2%
+                assert!(
+                    cube3_maps.len() == NUM_3CUBE_C5_MAPS,
+                    "num maps was {} expected {}",
+                    cube3_maps.len(),
+                    NUM_3CUBE_C5_MAPS
+                );
+                std::hint::black_box(cube3_maps);
+            })
+        },
+    );
+
     group_non_naive.bench_function(BenchmarkId::new("3cube_from_2cube_gsphere", "1e6"), |b| {
         let n = 3;
 
@@ -213,9 +247,45 @@ fn bench_non_naive(c: &mut Criterion) {
 
     let mut high_non_naive = c.benchmark_group("high_non_naive");
     high_non_naive
-        .sample_size(1)
         .measurement_time(std::time::Duration::from_secs(60))
         .warm_up_time(std::time::Duration::from_secs(10));
+
+    high_non_naive.bench_function(
+        BenchmarkId::new("4cube_non_degen_maps_from_3_cube", "1e6"),
+        |b| {
+            const N: usize = 4;
+
+            use cube::CubeGraph;
+            let cube3 = CubeGraph::new((N - 1) as u32);
+            let codomain = extras::c_n_graph(5);
+
+            let (cube_maps, _) = generate_maps_naive_stack(&cube3, &codomain);
+            let cube_maps = cube_maps.into_iter().map(CubeMap::from).collect::<Vec<_>>();
+
+            let non_degen_set = build_hashmap(
+                cube_maps
+                    .iter()
+                    .filter(|&map| !map.is_degenerate())
+                    .map(|m| m.inner()),
+            );
+
+            b.iter(|| {
+                // time:   [0.5 s 0.558 s 0.589 s]
+                // Expected time for non degen 5 cube -> c5 maps = (969830/2475) ^ 2 * 0.5s
+                // = 21.23 hours
+                let combined_iter = combined_cube_maps(&cube_maps);
+                let boundary_maps: Vec<Poly<u64, { 2 * N }>> =
+                    boundary_maps(combined_iter, &non_degen_set).collect();
+                assert!(
+                    boundary_maps.len() == NUM_4CUBE_C5_NON_DEGEN_MAPS,
+                    "Expected {} boundary maps, got {}",
+                    NUM_4CUBE_C5_NON_DEGEN_MAPS,
+                    boundary_maps.len()
+                );
+                std::hint::black_box(boundary_maps);
+            })
+        },
+    );
 
     high_non_naive.bench_function(
         BenchmarkId::new("4cube_non_degen_maps_from_3_cube", "1e6"),
@@ -235,7 +305,6 @@ fn bench_non_naive(c: &mut Criterion) {
                     .filter(|&map| !map.is_degenerate())
                     .map(|m| m.inner()),
             );
-            //
 
             b.iter(|| {
                 // time:   [14.829 s 14.858 s 14.890 s]
