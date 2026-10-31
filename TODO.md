@@ -23,11 +23,30 @@
       are the *births* of the degree below, i.e. the map `r_{p-1}`), and
       `redzed_dh` runs Phase 1 + Phase 2. Validated: it reproduces
       `homology::betti_numbers` on C3..C6 and Gsph, in both full and active
-      modes. Active enumeration skips ~97% of top cubes (Gsph degree 3:
-      21424 -> 583).
-  - Remaining: `redzed_dh` hardcodes the `Poly` capacity dispatch (CAP =
-    2, 4, 6), so only n = 1, 2 run. Extending to n >= 3 needs the same dispatch
-    plus the reductions below, or a non-const-capacity `Poly`.
+      modes. Active enumeration skips ~97% of top cubes at degree 2 (Gsph:
+      21424 -> 583) and 99.7% at degree 3 (C5: 978350 -> 3207).
+  - `beta(C5) = [1, 1, 0, 0]`, so `H_3(C5) = 0`, agreed on by
+    `homology::report_to` and by `redzed_dh` in both modes.
+  - Active enumeration has to glue along *every* axis, not just the appended
+    one (`CubeMap::try_combine_along`). The paper gets this for free by ranging
+    the positive face over the whole hyperoctahedral orbit of `B`; without the
+    quotient the equivalent is to insert the new coordinate at each of the
+    `dim + 1` positions. Pairing on the appended axis alone found a top cube
+    only via its two last-coordinate faces, so a cube whose only live face lay
+    along an earlier axis was lost -- and its pivot with it, giving
+    `beta_3(C5) = 3` instead of `0`.
+  - Degrees 1..=3 are wired up. n = 3 builds the degree-3 level by pairing
+    degree-2 cubes and then pairs *that* for degree 4, so it is the first
+    expensive case; its cross-check against `homology::report_to` is ignored by
+    default and wants a release build:
+    `cargo test --release --lib -- --ignored --nocapture degree_three`.
+    Pick the test graph by degree-3 level size, not by graph size: C4 is worse
+    than C5 here (256 degree-2 maps, 64 non-degenerate, so an order of magnitude
+    more degree-3 cubes to pair).
+  - Remaining: `redzed_dh` and `report_to` hardcode the `Poly` capacity
+    dispatch (CAP = 2, 4, 6, 8). n >= 4 needs more dispatch, or a
+    non-const-capacity `Poly`. Past that the quotient below is what makes the
+    higher degrees affordable.
 - [ ] Dominated-vertex preprocessing from [KK24] arXiv:2410.09939.
 
 ## Conventions

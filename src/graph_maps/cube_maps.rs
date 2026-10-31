@@ -84,15 +84,47 @@ impl<V: UGraph, M: GraphMap<CubeGraph<u32>, V>> CubeMap<u32, V, M> {
         self.map.domain().dim()
     }
 
+    /// Both gluings of `self` and `other`: as `(self * other, other * self)`
+    /// along the new (appended) coordinate.
     pub fn try_combine<'w>(
         &self,
         other: &CubeMap<u32, V, M>,
         is_same: bool,
     ) -> Result<(CubeMap<u32, V, M>, CubeMap<u32, V, M>), GraphMapError> {
+        let dim = self.map.domain().dim();
+        let a = self.try_combine_along(other, dim, is_same)?;
+        let b = other.try_combine_along(self, dim, is_same)?;
+        Ok((a, b))
+    }
+
+    /// Glue `self` and `other` as the two faces along `axis` of an `(n+1)`-cube,
+    /// with `self` the negative face and `other` the positive one.
+    ///
+    /// `axis == dim` is the appending construction of [`Self::try_combine`];
+    /// smaller axes place the new coordinate in the middle of the vertex index.
+    /// That generality matters: a top-dimensional cube may have its only live
+    /// face along an axis other than the new one, so an enumeration that only
+    /// ever appends misses cubes, and with them real deaths.
+    ///
+    /// The gluing condition is `self(v) ~ other(v)` for every `v` in `Q_dim`, and
+    /// it is the *same for every axis*. An edge of `Q_{dim+1}` either changes the
+    /// new coordinate -- in which case it is exactly such a pair -- or it does
+    /// not, in which case it lies inside one of the two faces and is already
+    /// handled by their being graph maps. So only the construction depends on
+    /// the axis, which is what lets callers check the condition once and then
+    /// build every axis.
+    pub fn try_combine_along(
+        &self,
+        other: &CubeMap<u32, V, M>,
+        axis: u32,
+        is_same: bool,
+    ) -> Result<CubeMap<u32, V, M>, GraphMapError> {
         use GraphMapError as E;
         assert!(self.map.codomain() == other.map.codomain());
-        let n = self.map.domain().n();
         let dim = self.map.domain().dim();
+        let n = self.map.domain().n();
+        assert!(axis <= dim, "axis {axis} out of range for dimension {dim}");
+
         for (i, (x, y)) in self
             .map
             .mapped_vertices()
@@ -104,45 +136,34 @@ impl<V: UGraph, M: GraphMap<CubeGraph<u32>, V>> CubeMap<u32, V, M> {
             }
         }
 
-        let combined_verts = self
-            .map
-            .mapped_vertices()
-            .chain(other.map.mapped_vertices());
-        let combined_verts_2 = other
-            .map
-            .mapped_vertices()
-            .chain(self.map.mapped_vertices());
+        // The new coordinate goes in at `axis`, rather than always at the end.
+        let mut verts = vec![0u32; (n as usize) * 2];
+        for v in 0..n {
+            verts[put_bit(v, axis, 0) as usize] = self.map.map(v);
+            verts[put_bit(v, axis, 1) as usize] = other.map.map(v);
+        }
 
-        let map = unsafe {
-            self.map
-                .change_domain(CubeGraph::new(dim + 1), combined_verts)
-        };
-        let map2 = unsafe {
-            other
-                .map
-                .change_domain(CubeGraph::new(dim + 1), combined_verts_2)
-        };
-        let degenerate_indices_iter = self
-            .degenerate_indices
-            .iter()
-            .zip(other.degenerate_indices.iter())
-            .map(|(a, b)| *a && *b);
-        let mut degenerate_indices = Vec::with_capacity((n + 1) as usize);
-        degenerate_indices.extend(degenerate_indices_iter);
-        degenerate_indices.push(is_same);
+        let map = unsafe { self.map.change_domain(CubeGraph::new(dim + 1), verts) };
 
-        Ok((
-            Self {
-                map,
-                degenerate_indices: degenerate_indices.clone(),
-                _marker: std::marker::PhantomData,
-            },
-            Self {
-                map: map2,
-                degenerate_indices,
-                _marker: std::marker::PhantomData,
-            },
-        ))
+        // Degenerate along `axis` exactly when the two faces agree; along any
+        // other axis exactly when both faces are themselves degenerate there.
+        let mut degenerate_indices = Vec::with_capacity(dim as usize + 1);
+        for j in 0..dim {
+            degenerate_indices.push(if j == axis {
+                is_same
+            } else {
+                self.degenerate_indices[j as usize] && other.degenerate_indices[j as usize]
+            });
+        }
+        if axis == dim {
+            degenerate_indices.push(is_same);
+        }
+
+        Ok(Self {
+            map,
+            degenerate_indices,
+            _marker: std::marker::PhantomData,
+        })
     }
 }
 

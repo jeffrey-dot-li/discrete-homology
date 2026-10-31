@@ -140,27 +140,46 @@ fn rank_dk<'u, 'v, V: UGraph, const CAP: usize>(
 }
 
 /// The chain-level data behind the Betti numbers: level sizes `|C_n|` and the
-/// ranks of `d_1, d_2, d_3` over `F_p`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// ranks of the boundary maps over `F_p`.
+///
+/// `c[n] = |C_n|` for `n = 0 ..= max_degree` and `rank_d[p - 1] = rank(d_p)`,
+/// so `rank_d` is one longer than `c`.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Report {
-    /// `|C_0|, |C_1|, |C_2|` -- the number of non-degenerate `n`-cubes.
-    pub c: [usize; 3],
-    /// `rank(d_1), rank(d_2), rank(d_3)`.
-    pub rank_d: [usize; 3],
-    /// `beta_0, beta_1, beta_2`.
-    pub betti: [i64; 3],
+    /// `|C_0|, |C_1|, ...`, the number of non-degenerate `n`-cubes.
+    pub c: Vec<usize>,
+    /// `rank(d_1), rank(d_2), ...`.
+    pub rank_d: Vec<usize>,
+    /// `beta_0, beta_1, ...`
+    pub betti: Vec<i64>,
 }
 
-/// Compute [`Report`] for `target` over `F_p`.
+/// [`Report`] up to `beta_2` over `F_p`.
+pub fn report<V: UGraph>(target: &V, p: i64) -> Report {
+    report_to(target, 2, p)
+}
+
+/// Compute [`Report`] for `beta_0 ..= beta_max_degree` over `F_p`.
 ///
-/// Cubes of degree 0..2 are enumerated naively; degree 3 is built by pairing
-/// degree-2 cubes ([`combined_cube_maps`]), which is what makes `beta_2`
-/// reachable at all (`beta_2` needs all of `d_3`).
+/// Cubes of degree 0..2 are enumerated naively; higher degrees are built by
+/// pairing the degree below ([`combined_cube_maps`]). That pairing is what makes
+/// `beta_2` reachable at all -- a naive enumeration of `Q_3 -> G` costs
+/// `|G|^8` -- but it also means the cost of degree `k` grows with the square of
+/// the number of `(k-1)`-cubes, so `max_degree = 3` is the practical limit here.
+///
+/// Note this is the *full* generator basis as rows, with no `r`-map and no
+/// active enumeration; [`super::redzed::redzed_dh`] is the independent
+/// implementation that uses both, and the two are cross-checked in tests.
 ///
 /// `p` must be prime. A large prime gives the rational Betti numbers whenever
 /// the groups are torsion-free in the degrees computed; small primes can only
 /// ever shrink a rank if `p`-torsion is present.
-pub fn report<V: UGraph>(target: &V, p: i64) -> Report {
+pub fn report_to<V: UGraph>(target: &V, max_degree: u32, p: i64) -> Report {
+    assert!(
+        (1..=3).contains(&max_degree),
+        "supported degrees are 1..=3, got {max_degree}"
+    );
+
     let s0 = CubeGraph::new(0u32);
     let s1 = CubeGraph::new(1u32);
     let s2 = CubeGraph::new(2u32);
@@ -168,7 +187,6 @@ pub fn report<V: UGraph>(target: &V, p: i64) -> Report {
     let deg0: Vec<CubeMapN<'_, '_, V>> = gen_level(&s0, target);
     let deg1: Vec<CubeMapN<'_, '_, V>> = gen_level(&s1, target);
     let deg2: Vec<CubeMapN<'_, '_, V>> = gen_level(&s2, target);
-    let deg3: Vec<CubeMapN<'_, '_, V>> = combined_cube_maps(&deg2).collect();
 
     let l0 = Level::from_maps(&deg0);
     let l1 = Level::from_maps(&deg1);
@@ -176,21 +194,42 @@ pub fn report<V: UGraph>(target: &V, p: i64) -> Report {
 
     let r1 = rank_dk::<V, 2>(&deg1, &l0, p);
     let r2 = rank_dk::<V, 4>(&deg2, &l1, p);
-    let r3 = rank_dk::<V, 6>(&deg3, &l2, p);
 
-    let c = [l0.dim(), l1.dim(), l2.dim()];
-    let rank_d = [r1, r2, r3];
-    let betti = [
-        c[0] as i64 - rank_d[0] as i64,
-        c[1] as i64 - rank_d[0] as i64 - rank_d[1] as i64,
-        c[2] as i64 - rank_d[1] as i64 - rank_d[2] as i64,
-    ];
+    let mut c = vec![l0.dim(), l1.dim(), l2.dim()];
+    let mut rank_d = vec![r1, r2];
+
+    if max_degree >= 2 {
+        let deg3: Vec<CubeMapN<'_, '_, V>> = combined_cube_maps(&deg2).collect();
+        let l3 = Level::from_maps(&deg3);
+        let r3 = rank_dk::<V, 6>(&deg3, &l2, p);
+        c.push(l3.dim());
+        rank_d.push(r3);
+
+        if max_degree == 3 {
+            let deg4: Vec<CubeMapN<'_, '_, V>> = combined_cube_maps(&deg3).collect();
+            let l4 = Level::from_maps(&deg4);
+            let r4 = rank_dk::<V, 8>(&deg4, &l3, p);
+            c.push(l4.dim());
+            rank_d.push(r4);
+        }
+    }
+
+    c.truncate(max_degree as usize + 1);
+
+    // beta_p = |C_p| - rank(d_p) - rank(d_{p+1}); the d_0 term is zero.
+    let betti: Vec<i64> = (0..=max_degree as usize)
+        .map(|k| {
+            let rank_dk = if k == 0 { 0 } else { rank_d[k - 1] as i64 };
+            c[k] as i64 - rank_dk - rank_d[k] as i64
+        })
+        .collect();
+
     Report { c, rank_d, betti }
 }
 
 /// Betti numbers `[beta_0, beta_1, beta_2]` of `target` over `F_p`.
 pub fn betti_numbers<V: UGraph>(target: &V, p: i64) -> Vec<i64> {
-    report(target, p).betti.to_vec()
+    report(target, p).betti
 }
 
 #[cfg(test)]

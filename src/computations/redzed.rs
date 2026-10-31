@@ -51,6 +51,7 @@ use std::collections::{HashMap, HashSet};
 use super::fp::{mod_inv, mod_norm, normalize, sub_scaled};
 use super::homology::{gen_level, CubeMapN, Level};
 use crate::computations::boundary::partial;
+use crate::graph_maps::cube_maps::combined_cube_maps;
 use crate::graph_maps::polynomial::Poly;
 use crate::graphs::cube::{CubeGraph, Newable};
 use crate::graphs::UGraph;
@@ -187,12 +188,21 @@ fn run_phase1<const CAP: usize, V: UGraph>(
     reducer
 }
 
-/// Phase 2: enumerate degree-`(deg+1)` cubes by pairing degree-`deg` cubes, and
+/// Phase 2: enumerate the top-degree cubes by pairing the degree below, and
 /// register the resulting columns.
 ///
 /// With `active` set, only pairs where the outer cube is currently active are
 /// followed, and the outer loop moves on as soon as that cube dies. Returns the
 /// reducer and the number of top cubes actually enumerated.
+///
+/// Every axis is tried, not just the appended one. The paper's enumeration
+/// ranges the positive face over the whole hyperoctahedral orbit of `B`, which
+/// lets it place the fixed active cube on *any* face; without the quotient, the
+/// equivalent is to build the gluing with the new coordinate inserted at each
+/// position in turn. Pairing along the appended axis only finds a top cube via
+/// its two last-coordinate faces, so a cube whose only live face lies along an
+/// earlier axis is lost -- and if it was a death, so is its pivot, which
+/// inflates the Betti number by exactly that count.
 fn run_phase2<const CAP: usize, V: UGraph>(
     maps: &[CubeMapN<'_, '_, V>],
     lower: &Level,
@@ -201,6 +211,10 @@ fn run_phase2<const CAP: usize, V: UGraph>(
     p: i64,
     active: bool,
 ) -> (ColumnReducer, usize) {
+    // The cubes being paired are degree `CAP / 2 - 1`; their gluing adds one
+    // coordinate, at any of `dim + 1` positions.
+    let dim = (CAP as u32) / 2 - 1;
+
     let mut reducer = ColumnReducer::new(p);
     let mut processed: HashSet<u64> = HashSet::new();
     let mut enumerated = 0usize;
@@ -231,46 +245,50 @@ fn run_phase2<const CAP: usize, V: UGraph>(
         // degenerate face contributes nothing to the column anyway, since
         // `boundary_column` drops it.
         for bi in 0..maps.len() {
-            // A * B is a (deg+1)-cube exactly when A(v) ~ B(v) for every v.
-            // Both orientations are needed: A must be able to sit on either the
-            // negative or the positive face.
-            let candidates: Vec<CubeMapN<'_, '_, V>> = if ai == bi {
-                maps[ai]
-                    .try_combine(&maps[ai], true)
-                    .ok()
-                    .map(|(c, _)| vec![c])
-                    .unwrap_or_default()
-            } else {
-                match maps[ai].try_combine(&maps[bi], false) {
-                    Ok((c0, c1)) => vec![c0, c1],
-                    Err(_) => Vec::new(),
-                }
-            };
+            let is_same = ai == bi;
 
-            for tau in candidates {
-                if tau.is_degenerate() {
-                    continue;
-                }
-                let tau_val = tau.inner().value();
-                if !processed.insert(tau_val) {
-                    continue;
-                }
-                enumerated += 1;
+            // The gluing condition is axis independent, so the appended-axis
+            // attempt doubles as the check: if it fails, no axis glues, and
+            // taking that fast path here keeps the cost of the non-glueable
+            // majority of pairs to a single scan.
+            if maps[ai]
+                .try_combine_along(&maps[bi], dim, is_same)
+                .is_err()
+            {
+                continue;
+            }
 
-                let col = boundary_column::<CAP, V>(&tau, lower, rows);
-                if let Outcome::Death { row } = reducer.push(tau_val, &col) {
-                    // Row indexes `births` (see `row_index` above), and the
-                    // reduction loop guarantees the row was not already a
-                    // pivot, so each birth dies at most once.
-                    still_active.remove(&births[row as usize]);
-                }
+            // Both orientations are needed: the active cube must be able to sit
+            // on either the negative or the positive face.
+            for axis in 0..=dim {
+                for (neg, pos) in [(ai, bi), (bi, ai)] {
+                    let Ok(tau) = maps[neg].try_combine_along(&maps[pos], axis, is_same) else {
+                        continue;
+                    };
+                    if tau.is_degenerate() {
+                        continue;
+                    }
+                    let tau_val = tau.inner().value();
+                    if !processed.insert(tau_val) {
+                        continue;
+                    }
+                    enumerated += 1;
 
-                if active && !still_active.contains(&a_val) {
-                    // A has died, so every remaining cube in this inner loop
-                    // would need some other active face to justify
-                    // enumerating it; those will be reached from their own
-                    // outer iteration.
-                    continue 'outer;
+                    let col = boundary_column::<CAP, V>(&tau, lower, rows);
+                    if let Outcome::Death { row } = reducer.push(tau_val, &col) {
+                        // Row indexes `births` (see `row_index` above), and the
+                        // reduction loop guarantees the row was not already a
+                        // pivot, so each birth dies at most once.
+                        still_active.remove(&births[row as usize]);
+                    }
+
+                    if active && !still_active.contains(&a_val) {
+                        // A has died, so every remaining cube reachable from
+                        // this inner loop would need some other active face to
+                        // justify enumerating it; those will be reached from
+                        // their own outer iteration.
+                        continue 'outer;
+                    }
                 }
             }
         }
@@ -285,10 +303,15 @@ fn run_phase2<const CAP: usize, V: UGraph>(
 /// otherwise every `(n+1)`-cube is enumerated. Both compute the same answer, and
 /// the corresponding `top_enumerated` counts expose the difference.
 ///
-/// `p` must be prime. Supported degrees are `n = 1, 2` for now, because the
-/// `Poly` capacity dispatch is hardcoded (see `boundary_column`).
+/// `p` must be prime. Supported degrees are `n = 1, 2, 3`, because the `Poly`
+/// capacity dispatch is hardcoded (see `boundary_column`). `n = 3` builds the
+/// whole degree-3 level first and then pairs it for degree 4, which is what
+/// makes it the first expensive case.
 pub fn redzed_dh<V: UGraph>(target: &V, n: u32, p: i64, active: bool) -> RedzedOutcome {
-    assert!(n == 1 || n == 2, "only degrees 1 and 2 are wired up so far");
+    assert!(
+        (1..=3).contains(&n),
+        "only degrees 1 through 3 are wired up so far, got {n}"
+    );
 
     let s0 = CubeGraph::new(0u32);
     let s1 = CubeGraph::new(1u32);
@@ -326,18 +349,46 @@ pub fn redzed_dh<V: UGraph>(target: &V, n: u32, p: i64, active: bool) -> RedzedO
     // d_2 : C_2 -> C_1, with rows the births of degree 1.
     let rows1 = row_index(r1.births());
     let r2 = run_phase1::<4, V>(&deg2, &l1, &rows1, p);
-    // Top phase: enumerate 3-cubes by pairing 2-cubes, d_3 : C_3 -> C_2.
     let rows2 = row_index(r2.births());
-    let (r3, top_enumerated) = run_phase2::<6, V>(&deg2, &l2, r2.births(), &rows2, p, active);
+
+    if n == 2 {
+        // Top phase: enumerate 3-cubes by pairing 2-cubes, d_3 : C_3 -> C_2.
+        let (r3, top_enumerated) =
+            run_phase2::<6, V>(&deg2, &l2, r2.births(), &rows2, p, active);
+        return RedzedOutcome {
+            betti: vec![
+                l0.dim() as i64 - r1.rank() as i64,
+                r1.births().len() as i64 - r2.rank() as i64,
+                r2.births().len() as i64 - r3.rank() as i64,
+            ],
+            births: vec![l0.dim(), r1.births().len(), r2.births().len()],
+            rank_d: vec![r1.rank(), r2.rank(), r3.rank()],
+            top_enumerated,
+        };
+    }
+
+    // n == 3: Phase 1 continues to degree 3, building the 3-cubes by pairing
+    // 2-cubes, then the top phase pairs 3-cubes to reach degree 4.
+    let deg3: Vec<CubeMapN<'_, '_, V>> = combined_cube_maps(&deg2).collect();
+    let l3 = Level::from_maps(&deg3);
+    let r3 = run_phase1::<6, V>(&deg3, &l2, &rows2, p);
+    let rows3 = row_index(r3.births());
+    let (r4, top_enumerated) = run_phase2::<8, V>(&deg3, &l3, r3.births(), &rows3, p, active);
 
     RedzedOutcome {
         betti: vec![
             l0.dim() as i64 - r1.rank() as i64,
             r1.births().len() as i64 - r2.rank() as i64,
             r2.births().len() as i64 - r3.rank() as i64,
+            r3.births().len() as i64 - r4.rank() as i64,
         ],
-        births: vec![l0.dim(), r1.births().len(), r2.births().len()],
-        rank_d: vec![r1.rank(), r2.rank(), r3.rank()],
+        births: vec![
+            l0.dim(),
+            r1.births().len(),
+            r2.births().len(),
+            r3.births().len(),
+        ],
+        rank_d: vec![r1.rank(), r2.rank(), r3.rank(), r4.rank()],
         top_enumerated,
     }
 }
@@ -345,7 +396,7 @@ pub fn redzed_dh<V: UGraph>(target: &V, n: u32, p: i64, active: bool) -> RedzedO
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::computations::homology::betti_numbers;
+    use crate::computations::homology::{betti_numbers, report_to};
     use crate::graphs::extras::{c_n_graph, greene_sphere};
 
     const P: i64 = 1_000_003;
@@ -429,11 +480,93 @@ mod tests {
         assert_eq!(redzed_dh(&c_n_graph(4), 1, P, false).betti, vec![1, 0]);
     }
 
+    /// Pairing must yield every cube exactly once. `run_phase1` relies on this
+    /// when it walks the combined degree-3 list: a generator pushed twice would
+    /// reduce to zero the second time and be miscounted as a birth, inflating
+    /// `|births_3|` and so `beta_2` and `beta_3`.
+    #[test]
+    fn test_pair_enumeration_has_no_duplicates() {
+        for (name, g) in [
+            ("C3", c_n_graph(3)),
+            ("C4", c_n_graph(4)),
+            ("C5", c_n_graph(5)),
+            ("Gsph", greene_sphere()),
+        ] {
+            let s2 = CubeGraph::new(2u32);
+            let deg2: Vec<CubeMapN<'_, '_, _>> = gen_level(&s2, &g);
+            let deg3: Vec<CubeMapN<'_, '_, _>> = combined_cube_maps(&deg2).collect();
+
+            let mut values: Vec<u64> = deg3.iter().map(|m| m.inner().value()).collect();
+            let total = values.len();
+            values.sort_unstable();
+            values.dedup();
+
+            assert_eq!(
+                values.len(),
+                total,
+                "{name}: {total} degree-3 cubes but only {} distinct",
+                values.len()
+            );
+        }
+    }
+
     /// The paper's `dim H_2(Gsph) = 1`, via RedZeD rather than via ranks.
     #[test]
     fn test_redzed_greene_sphere_h2() {
         let out = redzed_dh(&greene_sphere(), 2, P, false);
         assert_eq!(out.betti, vec![1, 0, 1]);
+    }
+
+    /// Degree 3, cross-checked against `homology::report_to`, which reduces
+    /// with the *full* non-degenerate basis as rows and no `r`-map. The two
+    /// implementations share only `partial` and the F_p primitives, so
+    /// agreement is real evidence.
+    ///
+    /// Ignored by default: degree 4 is built by pairing degree-3 cubes, so the
+    /// cost grows as the square of that level, which a debug build cannot
+    /// afford. Run it against a release build:
+    ///
+    /// `cargo test --release --lib -- --ignored --nocapture degree_three`
+    ///
+    /// The graph is chosen for a small degree-4 level, which is what actually
+    /// sets the cost. C5 has 2475 degree-3 cubes and ~987,735 degree-4 cubes.
+    /// Avoid the other obvious candidates: C4 has 256 degree-2 maps of which
+    /// only 64 are non-degenerate, so its degree-3 level is an order of
+    /// magnitude longer, and C3 is a complete graph, so *every* one of the
+    /// 3^16 maps Q_4 -> C3 is a graph map.
+    #[test]
+    #[ignore = "degree 4 enumeration is far too slow in a debug build; run with --release"]
+    fn test_redzed_degree_three_matches_rank() {
+        for (name, g) in [("C5", c_n_graph(5))] {
+            let expected = report_to(&g, 3, P).betti;
+            let full = redzed_dh(&g, 3, P, false);
+            let active = redzed_dh(&g, 3, P, true);
+
+            for (mode, out) in [("full", &full), ("active", &active)] {
+                assert_eq!(
+                    out.betti, expected,
+                    "{name} ({mode}): RedZeD gave {:?}, rank gave {expected:?}",
+                    out.betti
+                );
+                for p in 0..=3 {
+                    assert_eq!(
+                        out.betti[p],
+                        out.births[p] as i64 - out.rank_d[p] as i64,
+                        "{name} ({mode}): beta_{p} identity"
+                    );
+                }
+            }
+
+            eprintln!(
+                "{name}: beta = {:?}, |C3| = {}, top cubes enumerated {} -> {} ({:.1}% skipped)",
+                full.betti,
+                full.births[3] + full.rank_d[2],
+                full.top_enumerated,
+                active.top_enumerated,
+                100.0 * (full.top_enumerated - active.top_enumerated) as f64
+                    / full.top_enumerated.max(1) as f64
+            );
+        }
     }
 
     /// Active enumeration must give the same answer while constructing fewer
