@@ -36,6 +36,18 @@
     (`beta_2 = 8 - rank(d_2) = 1`, a non-vacuous match).
   - Original stub in `graph_maps/cube_isomorphism.rs` is superseded by
     `symmetry.rs` and is still dead code.
+  - Degree 3 validated in release (ignored by default):
+    `cargo test --release --lib -- --ignored --nocapture quotient_degree_three`.
+    C5: quotient `|C_n| = [5, 5, 0, 5]` against unquotiented
+    `[5, 10, 70, 2230]`, both giving `beta = [1, 1, 0, 0]` in 21s. Degree 3
+    shrinks 446x from a group of order 48, so semi-degeneracy, not the orbit
+    count, is doing most of the work.
+  - The remaining cost is *not* the rank, which is tiny on the quotient, but
+    `rep_and_sign`: it scans the whole orbit for every cube, so it costs
+    `|C_n| * n! * 2^n * 2^n` operations. For C5 at degree 4 that is ~6e9,
+    comparable to the unquotiented enumeration it replaces. Memoising it, or
+    computing the stabiliser instead of scanning the orbit, is the obvious next
+    optimisation, and the paper pays the same cost in `hyper_orbit`.
 
 - [ ] Quotient *generation* (paper Algorithm 1): `L` = all orbit
       representatives, `C` = those that are neither degenerate nor
