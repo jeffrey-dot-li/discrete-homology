@@ -112,4 +112,14 @@ impl<T: PrimInt + Unsigned + Default + Zero, const CAP: usize> Poly<T, CAP> {
     pub fn len(&self) -> usize {
         self.indices.len() // Coeffs.len() is guaranteed to be the same
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.indices.is_empty()
+    }
+
+    /// Iterate over `(basis_index, coefficient)` pairs in ascending index order.
+    /// Both vectors are kept in lockstep, so this yields exactly `len()` terms.
+    pub fn terms(&self) -> impl Iterator<Item = (T, i32)> + '_ {
+        self.indices.iter().copied().zip(self.coeffs.iter().copied())
+    }
 }
